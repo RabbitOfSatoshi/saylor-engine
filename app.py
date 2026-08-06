@@ -402,7 +402,7 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 10. PLOTLY SNAPSHOT CHART (NATIVE TITLE)
+# 10. PLOTLY SNAPSHOT CHART (CLEAN TITLE & BOTTOM LEGEND)
 # ==========================================
 fig_bar = go.Figure()
 
@@ -450,9 +450,15 @@ fig_bar.update_layout(
     ),
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=450,
-    margin=dict(t=50, b=20, l=10, r=10),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    height=480,
+    margin=dict(t=50, b=80, l=10, r=10),
+    legend=dict(
+        orientation="h",
+        yanchor="top",
+        y=-0.15,
+        xanchor="center",
+        x=0.5
+    )
 )
 
 st.plotly_chart(fig_bar, use_container_width=True)
@@ -488,7 +494,7 @@ merged_df['internal_cash_sats'] = (user_shares * (merged_df['cash_per_share_usd'
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] + merged_df['internal_cash_sats']
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART (NATIVE TITLE)
+# 12. PLOTLY HISTORICAL TIMELINE CHART (CLEAN TITLE & BOTTOM LEGEND)
 # ==========================================
 fig_line = go.Figure()
 
@@ -534,9 +540,15 @@ fig_line.update_layout(
     xaxis_title="Datum",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=550,
-    margin=dict(t=50, b=20, l=10, r=10),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    height=580,
+    margin=dict(t=50, b=90, l=10, r=10),
+    legend=dict(
+        orientation="h",
+        yanchor="top",
+        y=-0.18,
+        xanchor="center",
+        x=0.5
+    )
 )
 
 st.plotly_chart(fig_line, use_container_width=True)
