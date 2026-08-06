@@ -17,7 +17,6 @@ st.set_page_config(
 # 2. HISTORISCHE SEC-FILING DATENBANK (MSTR)
 # (Alle Daten Post-Split 10:1 bereinigt)
 # ==========================================
-# Format: (Datum, BTC_Gesamtbestand, Shares_Outstanding_Approx)
 MSTR_BUY_HISTORY = [
     ("2020-08-11", 21454, 96000000),
     ("2020-09-14", 38250, 96000000),
@@ -386,39 +385,40 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 10. HISTORICAL TIMELINE ENGINE (PRECISION)
+# 10. HISTORICAL TIMELINE ENGINE (ROBUST JOIN)
 # ==========================================
 st.markdown("---")
 st.subheader(t["timeline_title"])
 
-# SEC-Filing Daten auf den täglichen Börsenindex anwenden
+# Indizes bereinigen (Zeitzonen sicher entfernen)
 hist_df_clean = hist_df.copy()
-# Zeitzonen entfernen, falls vorhanden
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
-# Merge der Treasury-Daten mit Vorwärts-Ausfüllung (ffill)
-merged_df = pd.merge_asof(
-    hist_df_clean.sort_index(),
-    df_treasury.sort_index(),
-    left_index=True,
-    right_index=True,
-    direction='backward'
-)
+# Treasury-Daten auf den Tages-Index des Preis-Dataframes abbilden
+treasury_daily = df_treasury.reindex(
+    hist_df_clean.index.union(df_treasury.index)
+).ffill().reindex(hist_df_clean.index)
 
-merged_df['btc_holdings'] = merged_df['btc_holdings'].ffill().fillna(21454)
-merged_df['shares_out'] = merged_df['shares_out'].ffill().fillna(96000000)
+# Fallbacks setzen
+treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(21454)
+treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(96000000)
+
+# In Haupt-Dataframe verbinden
+merged_df = hist_df_clean.copy()
+merged_df['btc_holdings'] = treasury_daily['btc_holdings']
+merged_df['shares_out'] = treasury_daily['shares_out']
 
 # Tagesgenaue Satoshis-Berechnungen
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-# Freimarktwert in Sats
+# 1. Freimarktwert in Sats
 merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
 
-# Physische BTC-Deckung pro Aktie in Sats
+# 2. Physische BTC-Deckung pro Aktie in Sats
 merged_df['internal_btc_sats'] = (user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
 
-# Physische BTC + Cash Reserve (Cash grob geschätzt über Zeit)
+# 3. Total Substance (+ Cash Reserve)
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] * 1.05
 
 # ==========================================
