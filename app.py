@@ -365,7 +365,7 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 10. PLOTLY SNAPSHOT CHART (DARK/LIGHT ADAPTIVE)
+# 10. PLOTLY SNAPSHOT CHART (TRANSPARENT / DARK MODE READY)
 # ==========================================
 fig_bar = go.Figure()
 
@@ -412,7 +412,9 @@ fig_bar.update_layout(
         font=dict(size=20)
     ),
     yaxis_title="Satoshis (Sats)",
-    template="none",  # Nutzt dynamisch den Streamlit Theme-Hintergrund
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="rgba(128,128,128,0.9)"),
     height=450,
     margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
@@ -421,6 +423,13 @@ fig_bar.update_layout(
         y=-0.2,
         xanchor="center",
         x=0.5
+    ),
+    yaxis=dict(
+        gridcolor="rgba(128, 128, 128, 0.2)",
+        zerolinecolor="rgba(128, 128, 128, 0.3)"
+    ),
+    xaxis=dict(
+        gridcolor="rgba(128, 128, 128, 0.2)"
     )
 )
 
@@ -494,7 +503,7 @@ merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + 
 hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART (DARK/LIGHT ADAPTIVE)
+# 12. PLOTLY HISTORICAL TIMELINE CHART (TRANSPARENT / DARK MODE READY)
 # ==========================================
 fig_line = go.Figure()
 
@@ -549,7 +558,9 @@ fig_line.update_layout(
     ),
     xaxis_title="Datum",
     yaxis_title="Satoshis pro Aktie (Sats / Share)",
-    template="none",  # Passt sich automatisch an Dark / Light Mode an
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="rgba(128,128,128,0.9)"),
     height=600,
     margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
@@ -558,6 +569,13 @@ fig_line.update_layout(
         y=-0.25,
         xanchor="center",
         x=0.5
+    ),
+    yaxis=dict(
+        gridcolor="rgba(128, 128, 128, 0.2)",
+        zerolinecolor="rgba(128, 128, 128, 0.3)"
+    ),
+    xaxis=dict(
+        gridcolor="rgba(128, 128, 128, 0.2)"
     )
 )
 
