@@ -117,11 +117,11 @@ TRANSLATIONS = {
         "footer_btc": "BTC Preis",
         "footer_mstr": "MSTR Preis",
         "footer_cash": "MSTR Cash-Reserve",
-        "footer_shares": "MSTR Aktien im Umlauf",
+        "footer_shares": "MSTR Aktien im Umlauf (Diluted)",
         "footer_sources_md": """
         **Verifizierte Datenquellen:**
         * **JSON Tracker (`mstr_treasury_history.json`):**
-          * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe & Satoshis pro Aktie.
+          * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe, `effective_diluted_shares` & Satoshis pro Aktie.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hartcodierte historische Cash-Reserven).
         * **Marktdaten & Wechselkurse:**
@@ -155,11 +155,11 @@ TRANSLATIONS = {
         "footer_btc": "BTC Price",
         "footer_mstr": "MSTR Price",
         "footer_cash": "MSTR Cash Reserve",
-        "footer_shares": "MSTR Shares Outstanding",
+        "footer_shares": "MSTR Shares Outstanding (Diluted)",
         "footer_sources_md": """
         **Verified Data Sources:**
         * **JSON Tracker (`mstr_treasury_history.json`):**
-          * Daily resolution of physical BTC purchases & Satoshis per share.
+          * Daily resolution of physical BTC purchases, `effective_diluted_shares` & Satoshis per share.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hardcoded historical cash reserves).
         * **Market Data & FX Rates:**
@@ -452,11 +452,14 @@ try:
     else:
         hist_data = json_raw
 
+    # Primär effective_diluted_shares nutzen, alternativ fallback auf effective_shares
+    diluted_shares_series = hist_data.get("effective_diluted_shares", hist_data.get("effective_shares", [None]*len(hist_data["dates"])))
+
     # Erstelle DataFrame aus den parallelen Arrays der Saylor-Struktur
     df_j = pd.DataFrame({
         "dates": hist_data["dates"],
         "btc_per_share": hist_data.get("btc_per_share", [None]*len(hist_data["dates"])),
-        "effective_shares": hist_data.get("effective_diluted_shares", hist_data.get("effective_shares", [None]*len(hist_data["dates"])))
+        "effective_diluted_shares": diluted_shares_series
     })
 
     # Datum parsen und als Index setzen
@@ -470,9 +473,9 @@ try:
     # Auf die Tages-Zeitachse des Charts reindexieren und Stufen füllen (ffill)
     merged_df['btc_per_share_sats'] = df_j['btc_per_share_sats'].reindex(merged_df.index).ffill().bfill()
 
-    # Shares out verarbeiten (falls vorhanden)
-    if 'effective_shares' in df_j.columns and df_j['effective_shares'].notna().any():
-        merged_df['shares_out'] = pd.to_numeric(df_j['effective_shares'], errors='coerce').reindex(merged_df.index).ffill().bfill()
+    # Diluted Shares out verarbeiten
+    if 'effective_diluted_shares' in df_j.columns and df_j['effective_diluted_shares'].notna().any():
+        merged_df['shares_out'] = pd.to_numeric(df_j['effective_diluted_shares'], errors='coerce').reindex(merged_df.index).ffill().bfill()
     else:
         merged_df['shares_out'] = live_data["mstr_shares"]
 
