@@ -6,32 +6,45 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An interactive financial analytics dashboard built with **Streamlit** and **Plotly** to measure the internal Bitcoin substance and leverage effect of MicroStrategy ($MSTR) stock against a spot Bitcoin HODL benchmark.
+An interactive financial analytics dashboard built with **Streamlit** and **Plotly** to evaluate the internal Bitcoin substance, share dilution dynamics (*effective diluted shares*), and leverage effect of MicroStrategy ($MSTR) stock compared to a spot Bitcoin HODL benchmark.
 
 ---
 
-## 📊 Overview & Core Value
+## 📊 Overview & Core Features
 
-The **Saylor Engine** evaluates how much internal corporate Bitcoin backing and liquidity reserve a shareholder controls compared to directly purchasing spot Bitcoin.
+The **Saylor Engine** precisely evaluates how much physical Bitcoin backing and liquidity reserve a shareholder controls per share and tracks how this corporate substance has developed over time.
 
-Key analytical metrics:
-* **Satoshi Multiplier:** Quantifies corporate BTC backing per share relative to spot markets.
-* **Corporate Cash-to-Sats:** Converts corporate USD cash reserves into effective Satoshi exposure.
-* **NAV Premium Simulator:** Models dynamic changes in market sentiment (-20% to +50% NAV premium/discount).
+### Key Features:
+* **JSON Treasury Parser:** Automatically parses local `mstr_treasury_history.json` data sourced from [Saylor Tracker](https://saylortracker.com/) for daily resolution of physical BTC purchases and `effective_diluted_shares`.
+* **Dual-Layer Corporate Substance:** Combines physically held BTC with SEC-verified corporate cash reserves (Form 8-K / 10-Q / 10-K) converted into Satoshis.
+* **Historical Timeline Chart:** Dynamic resolution of *Free Market Value*, *Spot HODL Benchmark*, *BTC/Share*, and *Total Substance/Share* back to August 2020.
+* **Multi-Currency Support (USD / EUR):** Automatic currency conversions via Yahoo Finance API.
+* **NAV Premium Simulator:** Live modeling of dynamic changes in market sentiment (-20% to +50% NAV premium/discount).
 
 ---
 
-## 🧮 Mathematical Engine
+## 🧮 Mathematical Engine & Formulas
 
-All core metrics convert positions into **Satoshis (1 BTC = 100,000,000 Sats)**:
+All internal metrics convert positions into **Satoshis (1 BTC = 100,000,000 Sats)**:
 
 | Step | Metric | Formula |
 | :--- | :--- | :--- |
-| **1. Benchmark** | **Spot HODL Sats** | `(Invest_EUR / BTC_Price_Past) × 100,000,000` |
-| **2. Liquidation** | **Market Sats** | `(Market_Value_EUR / BTC_Price_Curr_EUR) × 100,000,000` |
-| **3. Core Asset** | **Internal BTC Sats** | `Shares × (MSTR_BTC / Total_Shares) × 100,000,000` |
-| **4. Dry Powder** | **Internal Cash Sats** | `(User_Cash_USD / BTC_Price_Curr_USD) × 100,000,000` |
-| **5. Total** | **Corporate Substance** | `Internal_BTC_Sats + Internal_Cash_Sats` |
+| **1. Benchmark** | **Spot HODL Sats** | `(Invest_Fiat / BTC_Price_Past) × 100,000,000` |
+| **2. Market Value** | **Free Market Value** | `(Shares × MSTR_Price_Simulated / BTC_Price_Curr) × 100,000,000` |
+| **3. Core Asset** | **BTC / Share (Sats)** | `(MSTR_BTC_Total / Effective_Diluted_Shares) × 100,000,000` |
+| **4. Dry Powder** | **Cash / Share (Sats)** | `(SEC_Cash_USD / Effective_Diluted_Shares / BTC_Price_USD) × 100,000,000` |
+| **5. Total** | **Total Substance / Share** | `BTC_per_Share_Sats + Cash_per_Share_Sats` |
+
+---
+
+## 📚 Primary Data Sources
+
+1. **JSON Treasury Tracker (`mstr_treasury_history.json`):**
+   * Daily resolution of physical BTC purchases, treasury holdings, and `effective_diluted_shares` sourced from [Saylor Tracker](https://saylortracker.com/).
+2. **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
+   * Form 8-K, 10-Q & 10-K for historical and current USD cash reserves.
+3. **Yahoo Finance API (`yfinance`):**
+   * Live & historical market prices for `MSTR` (split-adjusted), `BTC-USD`, and `EURUSD=X`.
 
 ---
 
@@ -39,13 +52,7 @@ All core metrics convert positions into **Satoshis (1 BTC = 100,000,000 Sats)**:
 
 * **Frontend Framework:** [Streamlit](https://streamlit.io)
 * **Visualizations:** [Plotly Express / Graph Objects](https://plotly.com/python/)
-* **Financial Data API:** [yfinance](https://pypi.org/project/yfinance/) (Yahoo Finance)
+* **Data Processing:** [Pandas](https://pandas.pydata.org/)
+* **Financial Data API:** [yfinance](https://pypi.org/project/yfinance/)
 
 ---
-
-## 🚀 Quick Start (Local Setup)
-
-### 1. Clone the repository
-```bash
-git clone [https://github.com/YOUR-USERNAME/saylor-engine.git](https://github.com/YOUR-USERNAME/saylor-engine.git)
-cd saylor-engine
