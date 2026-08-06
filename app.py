@@ -120,7 +120,7 @@ TRANSLATIONS = {
         "footer_shares": "MSTR Aktien im Umlauf",
         "footer_sources_md": """
         **Verifizierte Datenquellen:**
-        * **JSON Tracker (`mstr_purchases.json`):**
+        * **JSON Tracker (`mstr_treasury_history.json`):**
           * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe & Satoshis pro Aktie.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hartcodierte historische Cash-Reserven).
@@ -158,7 +158,7 @@ TRANSLATIONS = {
         "footer_shares": "MSTR Shares Outstanding",
         "footer_sources_md": """
         **Verified Data Sources:**
-        * **JSON Tracker (`mstr_purchases.json`):**
+        * **JSON Tracker (`mstr_treasury_history.json`):**
           * Daily resolution of physical BTC purchases & Satoshis per share.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hardcoded historical cash reserves).
@@ -423,7 +423,7 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. COMBINED DATA ENGINE (DIREKTES JSON-PARSING OHNE FLATLINE-FALLBACK)
+# 11. COMBINED DATA ENGINE (SAYLOR-TRACKER JSON PARSER)
 # ==========================================
 st.markdown("---")
 
@@ -439,43 +439,45 @@ btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 # 1. Börsenpreis in Sats pro Aktie
 merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * SATS_PER_BTC
 
-# 2. JSON DIREKT LADEN
+# 2. SAYLOR-TRACKER JSON DIREKT LADEN UND ENTPACKEN
 try:
     with open("mstr_treasury_history.json", "r") as f:
         json_raw = json.load(f)
     
-    df_j = pd.DataFrame(json_raw)
-    
-    # Datum konvertieren & als Index setzen
-    # Passt sich an 'date' oder 'datum' an
-    d_col = 'dates' if 'dates' in df_j.columns else 'datum'
-    df_j['parsed_date'] = pd.to_datetime(df_j[d_col]).dt.tz_localize(None)
+    # Verschachtelten Pfad extrahieren: MSTR -> historicalData
+    if "MSTR" in json_raw and "historicalData" in json_raw["MSTR"]:
+        hist_data = json_raw["MSTR"]["historicalData"]
+    elif "historicalData" in json_raw:
+        hist_data = json_raw["historicalData"]
+    else:
+        hist_data = json_raw
+
+    # Erstelle DataFrame aus den parallelen Arrays der Saylor-Struktur
+    df_j = pd.DataFrame({
+        "dates": hist_data["dates"],
+        "btc_per_share": hist_data.get("btc_per_share", [None]*len(hist_data["dates"])),
+        "effective_shares": hist_data.get("effective_diluted_shares", hist_data.get("effective_shares", [None]*len(hist_data["dates"])))
+    })
+
+    # Datum parsen und als Index setzen
+    df_j['parsed_date'] = pd.to_datetime(df_j['dates']).dt.tz_localize(None)
     df_j = df_j.sort_values('parsed_date').drop_duplicates('parsed_date', keep='last')
     df_j.set_index('parsed_date', inplace=True)
 
-    # Erkenne die BTC/Share-Spalte aus deinem Tracker
-    if 'btc_per_share_sats' in df_j.columns:
-        sats_series = df_j['btc_per_share_sats']
-    elif 'sats_per_share' in df_j.columns:
-        sats_series = df_j['sats_per_share']
-    elif 'btc_holdings' in df_j.columns and 'shares_out' in df_j.columns:
-        sats_series = (df_j['btc_holdings'] / df_j['shares_out']) * SATS_PER_BTC
-    else:
-        # Nimm die erste numerische Spalte, die 'sat' oder 'btc' enthält
-        num_col = [c for c in df_j.columns if 'sat' in c.lower() or 'btc' in c.lower()][0]
-        sats_series = df_j[num_col]
+    # btc_per_share (in BTC) -> umrechnen in Satoshis (* 100 Mio.)
+    df_j['btc_per_share_sats'] = pd.to_numeric(df_j['btc_per_share'], errors='coerce') * SATS_PER_BTC
 
-    # Mappe die JSON-Werte exakt auf die Tages-Zeitachse des Charts (mit ffill für Stufen)
-    merged_df['btc_per_share_sats'] = sats_series.reindex(merged_df.index).ffill().bfill()
+    # Auf die Tages-Zeitachse des Charts reindexieren und Stufen füllen (ffill)
+    merged_df['btc_per_share_sats'] = df_j['btc_per_share_sats'].reindex(merged_df.index).ffill().bfill()
 
-    if 'shares_out' in df_j.columns:
-        merged_df['shares_out'] = df_j['shares_out'].reindex(merged_df.index).ffill().bfill()
+    # Shares out verarbeiten (falls vorhanden)
+    if 'effective_shares' in df_j.columns and df_j['effective_shares'].notna().any():
+        merged_df['shares_out'] = pd.to_numeric(df_j['effective_shares'], errors='coerce').reindex(merged_df.index).ffill().bfill()
     else:
         merged_df['shares_out'] = live_data["mstr_shares"]
 
 except Exception as e:
-    st.error(f"❌ JSON-Fehler: {e}. Bitte Spaltennamen in mstr_purchases.json prüfen!")
-    # Nur wenn Datei fehlt, Notfallwert:
+    st.error(f"❌ JSON-Fehler beim Lesen der Saylor-Struktur: {e}")
     merged_df['btc_per_share_sats'] = (live_data["mstr_btc"] / live_data["mstr_shares"]) * SATS_PER_BTC
     merged_df['shares_out'] = live_data["mstr_shares"]
 
