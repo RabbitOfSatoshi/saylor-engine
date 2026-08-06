@@ -325,26 +325,19 @@ SATS_PER_BTC = 100_000_000
 
 total_invest = user_shares * mstr_price_past
 
-# Step 1: HODL Benchmark
 hodl_benchmark_sats = (total_invest / btc_price_past) * SATS_PER_BTC
-
-# Step 2: Free Market Today
 market_value_fiat = user_shares * mstr_price_simulated
 market_value_sats = (market_value_fiat / btc_price_curr) * SATS_PER_BTC
 
-# Step 3: Saylor Engine (Internal BTC)
 current_btc_per_share = live_data["mstr_btc"] / live_data["mstr_shares"]
 internal_btc_sats = user_shares * current_btc_per_share * SATS_PER_BTC
 
-# Step 4: Cash-to-Sats
 cash_per_share_usd = live_data["mstr_cash_usd"] / live_data["mstr_shares"]
 total_user_cash_usd = user_shares * cash_per_share_usd
 internal_cash_sats = (total_user_cash_usd / live_data["btc_usd"]) * SATS_PER_BTC
 
-# Step 5: Total Substance
 total_substance_sats = internal_btc_sats + internal_cash_sats
 
-# Renditen
 fiat_return_pct = ((market_value_fiat - total_invest) / total_invest) * 100
 market_sats_yield_pct = ((market_value_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
@@ -440,7 +433,7 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. HISTORICAL TIMELINE ENGINE (EXAKT PRO AKTIE CALCULATED)
+# 11. HISTORICAL TIMELINE ENGINE (PRO AKTIE)
 # ==========================================
 st.markdown("---")
 
@@ -467,20 +460,19 @@ merged_df['cash_usd'] = treasury_daily['cash_usd']
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-# 1. Börsenpreis der Aktie in Satoshis (pro Aktie)
+# Börsenpreis pro Aktie in Sats
 merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * SATS_PER_BTC
 
-# 2. Reine BTC pro Aktie (in Satoshis)
+# Reines BTC-Backing pro Aktie in Sats
 merged_df['btc_per_share_sats'] = (merged_df['btc_holdings'] / merged_df['shares_out']) * SATS_PER_BTC
 
-# 3. Cash pro Aktie umgerechnet in USD -> Satoshis an Tag X
+# Cash pro Aktie in USD -> Sats umgerechnet zum jeweiligen historischen BTC-Preis
 merged_df['cash_per_share_usd'] = merged_df['cash_usd'] / merged_df['shares_out']
 merged_df['cash_per_share_sats'] = (merged_df['cash_per_share_usd'] / merged_df['btc_usd']) * SATS_PER_BTC
 
-# 4. Gesamtes Satoshi-Äquivalent pro Aktie (BTC + Cash)
+# Gesamte Substanz pro Aktie (BTC + Cash)
 merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + merged_df['cash_per_share_sats']
 
-# HODL Benchmark PRO AKTIE (relativ zum Kaufdatum)
 hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 
 # ==========================================
@@ -488,7 +480,7 @@ hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 # ==========================================
 fig_line = go.Figure()
 
-# 1. Börsenwert der Aktie in Sats
+# 1. Free Market Value (Börsenkurs in Sats)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['mstr_price_in_sats'],
@@ -511,23 +503,23 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Spot Benchmark / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 3. BTC / Share (Sats)
+# 3. BTC / Share (Reines physisches BTC-Backing)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['btc_per_share_sats'],
     mode='lines',
     name=t["line_btc"],
-    line=dict(color='#4CAF50', width=2.5),
+    line=dict(color='#2E7D32', width=3),  # Dunkles Grün für reines BTC
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 4. Satoshi Equivalent / Share (incl. Cash)
+# 4. Satoshi Equivalent / Share (incl. Cash) - Setzen wir hier optisch ab (Helles Grün, gestrichelt)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['total_substance_per_share_sats'],
     mode='lines',
     name=t["line_total"],
-    line=dict(color='#81C784', width=1.5, dash='dot'),
+    line=dict(color='#81C784', width=2, dash='dot'),
     customdata=merged_df[['cash_per_share_usd', 'cash_per_share_sats']].values,
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Total Substance / Share:</b> %{y:,.0f} Sats<br><i>(davon Cash: $%{customdata[0]:,.2f} = %{customdata[1]:,.0f} Sats)</i><extra></extra>"
 ))
