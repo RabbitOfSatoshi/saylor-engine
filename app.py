@@ -14,21 +14,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# Sauberes CSS: Entfernt Streamlits Header und setzt den eigenen Sticky-Header ganz oben an.
 st.markdown("""
     <style>
-        /* 1. Unnötige Streamlit-Top-Bar ausblenden */
         header[data-testid="stHeader"] {
             display: none !important;
         }
-
-        /* 2. Seiten-Abstand oben auf Minimum reduzieren */
         .block-container {
             padding-top: 0.5rem !important;
             padding-bottom: 2rem !important;
         }
-
-        /* 3. Reiner Sticky-Header-Style */
         .sticky-header-box {
             position: -webkit-sticky;
             position: sticky;
@@ -39,7 +33,6 @@ st.markdown("""
             border-bottom: 1px solid rgba(49, 51, 63, 0.1);
             margin-bottom: 1.5rem;
         }
-
         .sticky-title {
             margin: 0;
             padding: 0;
@@ -47,7 +40,6 @@ st.markdown("""
             font-weight: 700;
             line-height: 1.2;
         }
-
         .sticky-subtitle {
             margin: 0;
             padding-top: 0.3rem;
@@ -58,22 +50,59 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. HISTORISCHE SEC-DATENBANK (EXAKT AUS JSON GELADEN)
+# 2. HISTORISCHE SEC-DATENBANK (EXAKT AUS JSON ENTPACKT)
 # ==========================================
 JSON_FILENAME = "mstr_treasury_history.json"
 
 try:
     with open(JSON_FILENAME, "r", encoding="utf-8") as f:
         json_data = json.load(f)
-    df_tx = pd.DataFrame(json_data)
-except FileNotFoundError:
-    st.error(f"Datei '{JSON_FILENAME}' wurde nicht gefunden! Bitte stelle sicher, dass sie im selben Ordner wie app.py liegt.")
-    st.stop()
 
-# Konvertierung und Kumulierung der Daten
-df_tx['date'] = pd.to_datetime(df_tx['date'])
-df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
-df_tx.set_index('date', inplace=True)
+    # Greife tief in den 'MSTR' -> 'historicalData' Knoten
+    if isinstance(json_data, dict):
+        if "MSTR" in json_data and "historicalData" in json_data["MSTR"]:
+            hist_node = json_data["MSTR"]["historicalData"]
+        elif "historicalData" in json_data:
+            hist_node = json_data["historicalData"]
+        else:
+            hist_node = json_data
+    else:
+        hist_node = json_data
+
+    df_tx = pd.DataFrame(hist_node)
+
+    # Keys aus deinem JSON auf die interne Logik mappen
+    column_mapping = {
+        'dates': 'date',
+        'btc_balance': 'btc_holdings',
+        'total_outstanding_shares': 'shares_out',
+        'cash_balance': 'cash_usd'
+    }
+    df_tx.rename(columns=column_mapping, inplace=True)
+
+    # Datum verarbeiten & als Index setzen
+    df_tx['date'] = pd.to_datetime(df_tx['date'])
+    df_tx.set_index('date', inplace=True)
+
+    # Absicherung & Clean-Up (Vorwärtsfüllen von Lücken)
+    if 'shares_out' not in df_tx.columns or df_tx['shares_out'].dropna().empty:
+        df_tx['shares_out'] = 353_900_000
+    else:
+        df_tx['shares_out'] = df_tx['shares_out'].ffill().bfill()
+
+    if 'cash_usd' not in df_tx.columns or df_tx['cash_usd'].dropna().empty:
+        df_tx['cash_usd'] = 4_000_000_000
+    else:
+        df_tx['cash_usd'] = df_tx['cash_usd'].ffill().bfill()
+
+    df_tx['btc_holdings'] = df_tx['btc_holdings'].ffill().bfill()
+
+except FileNotFoundError:
+    st.error(f"Datei '{JSON_FILENAME}' wurde nicht gefunden! Bitte stelle sicher, dass sie im Hauptverzeichnis liegt.")
+    st.stop()
+except Exception as e:
+    st.error(f"Fehler beim Verarbeiten der JSON-Datei: {e}")
+    st.stop()
 
 # ==========================================
 # 3. TRANSLATIONS
@@ -177,14 +206,13 @@ st.markdown(f"""
 # ==========================================
 @st.cache_data(ttl=3600)
 def fetch_live_data():
-    # Holt stets die aktuellsten Werte aus der JSON-Tabelle für die Live-Berechnung
     latest_sec = df_tx.iloc[-1]
     defaults = {
         "btc_usd": 65000.0,
         "mstr_usd": 135.0,
         "eur_usd": 1.08,
         "mstr_shares": int(latest_sec.get('shares_out', 353_900_000)),
-        "mstr_btc": int(latest_sec.get('btc_holdings', 842_138)),
+        "mstr_btc": float(latest_sec.get('btc_holdings', 842_138)),
         "mstr_cash_usd": float(latest_sec.get('cash_usd', 4_000_000_000))
     }
     try:
@@ -238,7 +266,6 @@ def fetch_historical_series(start_date):
 
 live_data = fetch_live_data()
 
-# Aktuelle Preise berechnen
 if currency == "EUR":
     btc_price_curr = live_data["btc_usd"] / live_data["eur_usd"]
     mstr_price_curr = live_data["mstr_usd"] / live_data["eur_usd"]
@@ -330,7 +357,6 @@ substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_bench
 # ==========================================
 col1, col2, col3 = st.columns(3)
 
-# 1. FIAT
 with col1:
     st.metric(
         label=f"{t['metric_fiat']} ({currency})",
@@ -338,7 +364,6 @@ with col1:
         delta=f"{fiat_return_pct:+.2f}% (Invest: {curr_symbol}{total_invest:,.2f})"
     )
 
-# 2. SPOT HODL BENCHMARK
 with col2:
     st.metric(
         label=t["metric_hodl"],
@@ -346,7 +371,6 @@ with col2:
         delta="100% Benchmark (Basis)"
     )
 
-# 3. CORPORATE BACKING (SUBSTANZ)
 with col3:
     st.metric(
         label=t["metric_backing"],
@@ -420,22 +444,20 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. HISTORICAL TIMELINE ENGINE (VERBINDUNG DATENBANK <-> HISTORIE)
+# 11. HISTORICAL TIMELINE ENGINE
 # ==========================================
 st.markdown("---")
 
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
-# Tagesgenaue Re-Indexierung der SEC-Filings über den Verlaufszeitraum
 treasury_daily = df_tx.reindex(
     hist_df_clean.index.union(df_tx.index)
 ).ffill().reindex(hist_df_clean.index)
 
-# Standardwerte absichern, falls Startdatum vor dem ersten Filing liegt
 first_btc = df_tx['btc_holdings'].iloc[0] if not df_tx.empty else 21454
 first_shares = df_tx['shares_out'].iloc[0] if not df_tx.empty else 96000000
-first_cash = df_tx['cash_usd'].iloc[0] if not df_tx.empty else 50000000
+first_cash = df_tx['cash_usd'].iloc[0] if not df_tx.empty else 0
 
 treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(first_btc)
 treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(first_shares)
@@ -449,7 +471,6 @@ merged_df['cash_usd'] = treasury_daily['cash_usd']
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-# Berechnungen für JEDEN Tag in der Zeitreihe:
 merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
 merged_df['btc_per_share_sats'] = (merged_df['btc_holdings'] / merged_df['shares_out']) * SATS_PER_BTC
 merged_df['internal_btc_sats'] = user_shares * merged_df['btc_per_share_sats']
@@ -463,7 +484,6 @@ merged_df['treasury_per_share_fiat'] = (merged_df['btc_per_share_sats'] / SATS_P
 # ==========================================
 fig_line = go.Figure()
 
-# Market Value Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['market_sats'],
@@ -476,7 +496,6 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
 ))
 
-# Spot HODL Benchmark Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=[hodl_benchmark_sats] * len(merged_df),
@@ -486,7 +505,6 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Spot Benchmark:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# Internal BTC Base Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['internal_btc_sats'],
@@ -497,7 +515,6 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{customdata[0]:,.0f} Sats<br><b>Treasury Value / Share:</b> " + curr_symbol + "%{customdata[1]:,.2f}<extra></extra>"
 ))
 
-# Total Substance Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['total_substance_sats'],
