@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 from datetime import date, timedelta
 import pandas as pd
+import json
 
 # ==========================================
 # 1. STREAMLIT PAGE CONFIG & CLEAN STICKY CSS
@@ -49,68 +50,42 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. HISTORISCHE SEC-FILING DATENBANK
-# Format: (Datum, BTC_Delta, Aktienanzahl_PostSplit, Cash_USD, SEC_Source)
+# 2. HISTORISCHE SEC-CASH-DATENBANK (8-K / 10-Q / 10-K)
+# Format: (Datum, Cash_USD)
 # ==========================================
-MSTR_SEC_HISTORICAL_DATA = [
-    ("2020-08-11", 21454, 96000000, 50000000, "SEC Form 8-K (11.08.2020)"),
-    ("2020-09-14", 16796, 96000000, 50000000, "SEC Form 8-K (14.09.2020)"),
-    ("2020-12-04", 2574, 96000000, 45000000, "SEC Form 8-K (04.12.2020)"),
-    ("2020-12-21", 29646, 97000000, 60000000, "SEC Form 8-K (21.12.2020)"),
-    ("2021-01-22", 314, 97000000, 60000000, "SEC Form 8-K (22.01.2021)"),
-    ("2021-02-02", 295, 97000000, 60000000, "SEC Form 8-K (02.02.2021)"),
-    ("2021-02-24", 19452, 99000000, 70000000, "SEC Form 8-K (24.02.2021)"),
-    ("2021-03-01", 324, 99000000, 70000000, "SEC Form 8-K (01.03.2021)"),
-    ("2021-03-05", 209, 99000000, 70000000, "SEC Form 8-K (05.03.2021)"),
-    ("2021-03-12", 262, 99000000, 70000000, "SEC Form 8-K (12.03.2021)"),
-    ("2021-04-05", 253, 99000000, 70000000, "SEC Form 8-K (05.04.2021)"),
-    ("2021-05-13", 271, 99000000, 70000000, "SEC Form 8-K (13.05.2021)"),
-    ("2021-05-18", 229, 99000000, 70000000, "SEC Form 8-K (18.05.2021)"),
-    ("2021-06-21", 13006, 107000000, 80000000, "SEC Form 8-K (21.06.2021)"),
-    ("2021-09-12", 8957, 107000000, 85000000, "SEC Form 8-K (12.09.2021)"),
-    ("2021-12-09", 8436, 112000000, 90000000, "SEC Form 8-K (09.12.2021)"),
-    ("2021-12-30", 1913, 112000000, 90000000, "SEC Form 8-K (30.12.2021)"),
-    ("2022-01-31", 660, 112000000, 80000000, "SEC Form 8-K (31.01.2022)"),
-    ("2022-04-05", 4167, 113000000, 70000000, "SEC Form 8-K (05.04.2022)"),
-    ("2022-06-29", 481, 113000000, 60000000, "SEC Form 8-K (29.06.2022)"),
-    ("2022-09-20", 301, 113000000, 65000000, "SEC Form 8-K (20.09.2022)"),
-    ("2022-12-22", -704, 115000000, 50000000, "SEC Form 8-K (22.12.2022) - Tax-Loss Sale"),
-    ("2022-12-24", 810, 115000000, 50000000, "SEC Form 8-K (24.12.2022) - Buyback"),
-    ("2022-12-28", 2384, 115000000, 50000000, "SEC Form 8-K (28.12.2022)"),
-    ("2023-03-27", 6455, 115000000, 50000000, "SEC Form 8-K (27.03.2023)"),
-    ("2023-04-05", 1045, 115000000, 50000000, "SEC Form 8-K (05.04.2023)"),
-    ("2023-06-28", 12333, 126000000, 60000000, "SEC Form 8-K (28.06.2023)"),
-    ("2023-07-31", 467, 126000000, 65000000, "SEC Form 8-K (31.07.2023)"),
-    ("2023-09-24", 5445, 137000000, 45000000, "SEC Form 8-K (24.09.2023)"),
-    ("2023-11-30", 16285, 148000000, 45000000, "SEC Form 8-K (30.11.2023)"),
-    ("2023-12-27", 14620, 161000000, 46800000, "SEC Form 10-K FY2023 (27.12.2023)"),
-    ("2024-01-31", 850, 161000000, 46800000, "SEC Form 8-K (31.01.2024)"),
-    ("2024-02-26", 3000, 170000000, 50000000, "SEC Form 8-K (26.02.2024)"),
-    ("2024-03-11", 12000, 177000000, 55000000, "SEC Form 8-K (11.03.2024)"),
-    ("2024-03-19", 9246, 177000000, 57000000, "SEC Form 8-K (19.03.2024)"),
-    ("2024-04-26", 154, 177000000, 57000000, "SEC Form 10-Q Q1 (26.04.2024)"),
-    ("2024-06-20", 11931, 177000000, 60000000, "SEC Form 8-K (20.06.2024)"),
-    ("2024-08-01", 169, 177000000, 60000000, "SEC Form 10-Q Q2 (01.08.2024)"),
-    ("2024-09-13", 18300, 197000000, 100000000, "SEC Form 8-K (13.09.2024)"),
-    ("2024-09-20", 7420, 203000000, 120000000, "SEC Form 8-K (20.09.2024)"),
-    ("2024-11-11", 27200, 222000000, 200000000, "SEC Form 8-K (11.11.2024)"),
-    ("2024-11-18", 51780, 256000000, 500000000, "SEC Form 8-K (18.11.2024)"),
-    ("2024-11-25", 55500, 280000000, 1000000000, "SEC Form 8-K (25.11.2024)"),
-    ("2024-12-02", 15400, 290000000, 1500000000, "SEC Form 8-K (02.12.2024)"),
-    ("2024-12-09", 21550, 305000000, 2000000000, "SEC Form 8-K (09.12.2024)"),
-    ("2025-01-01", 23720, 320000000, 2500000000, "SEC Form 10-K FY2024 (01.01.2025)"),
-    ("2025-06-01", 152630, 340000000, 3200000000, "SEC Form 10-Q Q2 (01.06.2025)"),
-    ("2026-01-01", 150000, 350000000, 3800000000, "SEC Form 10-K FY2025 (01.01.2026)"),
-    ("2026-08-01", 92138, 353900000, 4000000000, "SEC Form 10-Q Q2 (01.08.2026)")
+SEC_CASH_HISTORICAL = [
+    ("2020-08-11", 50000000),
+    ("2020-12-21", 60000000),
+    ("2021-02-24", 70000000),
+    ("2021-06-21", 80000000),
+    ("2021-09-12", 85000000),
+    ("2021-12-09", 90000000),
+    ("2022-01-31", 80000000),
+    ("2022-04-05", 70000000),
+    ("2022-06-29", 60000000),
+    ("2022-12-22", 50000000),
+    ("2023-06-28", 60000000),
+    ("2023-09-24", 45000000),
+    ("2023-12-27", 46800000),
+    ("2024-02-26", 50000000),
+    ("2024-03-11", 55000000),
+    ("2024-04-26", 57000000),
+    ("2024-06-20", 60000000),
+    ("2024-09-13", 100000000),
+    ("2024-11-11", 200000000),
+    ("2024-11-18", 500000000),
+    ("2024-11-25", 1000000000),
+    ("2024-12-02", 1500000000),
+    ("2024-12-09", 2000000000),
+    ("2025-01-01", 2500000000),
+    ("2025-06-01", 3200000000),
+    ("2026-01-01", 3800000000),
+    ("2026-08-01", 4000000000)
 ]
 
-df_tx = pd.DataFrame(
-    MSTR_SEC_HISTORICAL_DATA, 
-    columns=["date", "btc_change", "shares_out", "cash_usd", "source"]
-)
-df_tx['date'] = pd.to_datetime(df_tx['date'])
-df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
-df_tx.set_index('date', inplace=True)
+df_cash = pd.DataFrame(SEC_CASH_HISTORICAL, columns=["date", "cash_usd"])
+df_cash['date'] = pd.to_datetime(df_cash['date'])
+df_cash.set_index('date', inplace=True)
 
 # ==========================================
 # 3. TRANSLATIONS
@@ -118,7 +93,7 @@ df_tx.set_index('date', inplace=True)
 TRANSLATIONS = {
     "DE": {
         "title": "⚡ Saylor Engine ($MSTR)",
-        "subtitle": "Automatisches Satoshi-Multiplier & Substanz-Dashboard (SEC-Verifiziert)",
+        "subtitle": "Automatisches Satoshi-Multiplier & Substanz-Dashboard (SEC & JSON Verifiziert)",
         "sidebar_purchase": "🛒 Deine Kauf-Details",
         "purchase_date": "Kaufdatum wählen",
         "shares_count": "Anzahl MSTR-Aktien (Post-Split)",
@@ -146,16 +121,17 @@ TRANSLATIONS = {
         "footer_shares": "MSTR Aktien im Umlauf",
         "footer_sources_md": """
         **Verifizierte Datenquellen:**
+        * **JSON Tracker (`mstr_purchases.json`):**
+          * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe & Satoshis pro Aktie.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
-          * Form 8-K (Tagesgenaue BTC-Käufe & Verkäufe)
-          * Form 10-Q & 10-K (Quartalsweise Cash-Reserven & Aktien im Umlauf)
+          * Form 8-K, 10-Q & 10-K (Hartcodierte historische Cash-Reserven).
         * **Marktdaten & Wechselkurse:**
-          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt (10:1 Split vom 08.08.2024).
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt.
         """
     },
     "EN": {
         "title": "⚡ Saylor Engine ($MSTR)",
-        "subtitle": "Automated Satoshi Multiplier & Corporate Substance Dashboard (SEC Verified)",
+        "subtitle": "Automated Satoshi Multiplier & Corporate Substance Dashboard (SEC & JSON Verified)",
         "sidebar_purchase": "🛒 Your Purchase Details",
         "purchase_date": "Select Purchase Date",
         "shares_count": "Number of MSTR Shares (Post-Split)",
@@ -183,11 +159,12 @@ TRANSLATIONS = {
         "footer_shares": "MSTR Shares Outstanding",
         "footer_sources_md": """
         **Verified Data Sources:**
+        * **JSON Tracker (`mstr_purchases.json`):**
+          * Daily resolution of physical BTC purchases & Satoshis per share.
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
-          * Form 8-K (Daily BTC purchases & sales)
-          * Form 10-Q & 10-K (Quarterly Cash Reserves & Shares Outstanding)
+          * Form 8-K, 10-Q & 10-K (Hardcoded historical cash reserves).
         * **Market Data & FX Rates:**
-          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted (10:1 Split from 08/08/2024).
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted.
         """
     }
 }
@@ -216,18 +193,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 6. DATA FETCHING (LIVE & HISTORICAL)
+# 6. DATA FETCHING (LIVE & HISTORICAL MARKET DATA)
 # ==========================================
 @st.cache_data(ttl=3600)
 def fetch_live_data():
-    latest_sec = df_tx.iloc[-1]
     defaults = {
         "btc_usd": 65000.0,
         "mstr_usd": 135.0,
         "eur_usd": 1.08,
-        "mstr_shares": int(latest_sec.get('shares_out', 353_900_000)),
-        "mstr_btc": float(latest_sec.get('btc_holdings', 842_138)),
-        "mstr_cash_usd": float(latest_sec.get('cash_usd', 4_000_000_000))
+        "mstr_shares": 353_900_000,
+        "mstr_btc": 842_138,
+        "mstr_cash_usd": 4_000_000_000.0
     }
     try:
         btc_usd = yf.Ticker("BTC-USD").history(period="1d")['Close'].iloc[-1]
@@ -448,42 +424,61 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. HISTORICAL TIMELINE ENGINE (EXAKTE SEC-DATEN PRO AKTIE)
+# 11. COMBINED DATA ENGINE (JSON FOR BTC + HARDCODED SEC FOR CASH)
 # ==========================================
 st.markdown("---")
+
+# JSON Laden für die tagesgenauen BTC / Share Daten
+@st.cache_data
+def load_json_data():
+    try:
+        with open("mstr_purchases.json", "r") as f:
+            data = json.load(f)
+        
+        df_json = pd.DataFrame(data)
+        if 'date' in df_json.columns:
+            df_json['date'] = pd.to_datetime(df_json['date'])
+            df_json.set_index('date', inplace=True)
+        return df_json
+    except Exception:
+        return None
+
+df_json_btc = load_json_data()
 
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
-# Dynamic Transaktions- & Cash-Map auf Tages-Index spiegeln
-treasury_daily = df_tx.reindex(
-    hist_df_clean.index.union(df_tx.index)
-).ffill().reindex(hist_df_clean.index)
-
-# Fallbacks für historische Lücken vor der 1. SEC-Meldung
-treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(21454)
-treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(96000000)
-treasury_daily['cash_usd'] = treasury_daily['cash_usd'].fillna(50000000)
-
 merged_df = hist_df_clean.copy()
-merged_df['btc_holdings'] = treasury_daily['btc_holdings']
-merged_df['shares_out'] = treasury_daily['shares_out']
-merged_df['cash_usd'] = treasury_daily['cash_usd']
 
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-# Börsenpreis pro Aktie in Sats
+# 1. Börsenpreis in Sats pro Aktie
 merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * SATS_PER_BTC
 
-# Reines BTC-Backing pro Aktie in Sats
-merged_df['btc_per_share_sats'] = (merged_df['btc_holdings'] / merged_df['shares_out']) * SATS_PER_BTC
+# 2. BTC / Share aus JSON mergen (feingliedrige Käufe)
+if df_json_btc is not None and 'btc_per_share_sats' in df_json_btc.columns:
+    btc_json_daily = df_json_btc['btc_per_share_sats'].reindex(merged_df.index).ffill().bfill()
+    merged_df['btc_per_share_sats'] = btc_json_daily
+    
+    if 'shares_out' in df_json_btc.columns:
+        merged_df['shares_out'] = df_json_btc['shares_out'].reindex(merged_df.index).ffill().bfill()
+    else:
+        merged_df['shares_out'] = live_data["mstr_shares"]
+else:
+    # Fallback falls kein JSON vorhanden
+    merged_df['btc_per_share_sats'] = (live_data["mstr_btc"] / live_data["mstr_shares"]) * SATS_PER_BTC
+    merged_df['shares_out'] = live_data["mstr_shares"]
 
-# Cash pro Aktie in USD -> Sats umgerechnet zum jeweiligen historischen BTC-Preis des Tages
+# 3. Cash aus hartcodiertem SEC-Array mappen & ffill anwenden
+cash_daily = df_cash['cash_usd'].reindex(merged_df.index).ffill().bfill()
+merged_df['cash_usd'] = cash_daily
+
+# Cash pro Aktie in Sats umrechnen
 merged_df['cash_per_share_usd'] = merged_df['cash_usd'] / merged_df['shares_out']
 merged_df['cash_per_share_sats'] = (merged_df['cash_per_share_usd'] / merged_df['btc_usd']) * SATS_PER_BTC
 
-# Gesamte Substanz pro Aktie (BTC + Cash)
+# 4. Gesamtsubstanz: JSON BTC/Share + Hartcodiertes SEC-Cash/Share
 merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + merged_df['cash_per_share_sats']
 
 hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
@@ -516,17 +511,17 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Spot Benchmark / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 3. BTC / Share (Reines physisches BTC-Backing nach SEC)
+# 3. BTC / Share aus JSON (Fein aufgelöst)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['btc_per_share_sats'],
     mode='lines',
     name=t["line_btc"],
     line=dict(color='#2E7D32', width=3),
-    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{y:,.0f} Sats<extra></extra>"
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share (JSON):</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 4. Satoshi Equivalent / Share (incl. Cash Reserve aus SEC-Filings)
+# 4. Satoshi Equivalent / Share (JSON BTC + SEC Cash)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['total_substance_per_share_sats'],
@@ -534,7 +529,7 @@ fig_line.add_trace(go.Scatter(
     name=t["line_total"],
     line=dict(color='#81C784', width=2, dash='dot'),
     customdata=merged_df[['cash_per_share_usd', 'cash_per_share_sats']].values,
-    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Total Substance / Share:</b> %{y:,.0f} Sats<br><i>(davon Cash: $%{customdata[0]:,.2f} = %{customdata[1]:,.0f} Sats)</i><extra></extra>"
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Total Substance:</b> %{y:,.0f} Sats<br><i>(SEC Cash Anteil: $%{customdata[0]:,.2f} = %{customdata[1]:,.0f} Sats)</i><extra></extra>"
 ))
 
 fig_line.update_layout(
