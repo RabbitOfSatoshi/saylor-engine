@@ -441,7 +441,7 @@ merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * S
 
 # 2. JSON DIREKT LADEN
 try:
-    with open("mstr_purchases.json", "r") as f:
+    with open("mstr_treasury_history.json", "r") as f:
         json_raw = json.load(f)
     
     df_j = pd.DataFrame(json_raw)
