@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 # ==========================================
-# 1. STREAMLIT PAGE CONFIG & CUSTOM CSS
+# 1. STREAMLIT PAGE CONFIG & CLEAN STICKY CSS
 # ==========================================
 st.set_page_config(
     page_title="Saylor Engine Dashboard",
@@ -13,24 +13,46 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS: Entfernt den riesigen Leerraum oben & fixiert die Überschrift sauber
+# Sauberes CSS: Entfernt das 'undefined' bei Plotly, blendet den Streamlit-Header aus
+# und erstellt eine kompakte, fixierte Überschrift ganz oben.
 st.markdown("""
     <style>
-        /* 1. Standard-Padding von Streamlit oben drastisch reduzieren */
+        /* 1. Unnötige Streamlit-Top-Bar ausblenden */
+        header[data-testid="stHeader"] {
+            display: none !important;
+        }
+
+        /* 2. Seiten-Abstand oben auf Minimum reduzieren */
         .block-container {
-            padding-top: 2rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 2rem !important;
         }
 
-        /* 2. Sticky Container ganz oben andocken ohne Lücke */
-        div[data-testid="stVerticalBlock"] > div:has(div.sticky-header) {
+        /* 3. Reiner Sticky-Header-Style (verhindert 'undefined' bei Plotly) */
+        .sticky-header-box {
+            position: -webkit-sticky;
             position: sticky;
-            top: 0rem;
+            top: 0;
             background-color: var(--background-color, #ffffff);
-            z-index: 999;
-            padding-top: 0.5rem;
-            padding-bottom: 0.8rem;
+            z-index: 9999;
+            padding: 0.8rem 0 0.8rem 0;
             border-bottom: 1px solid rgba(49, 51, 63, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .sticky-title {
+            margin: 0;
+            padding: 0;
+            font-size: 2.2rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .sticky-subtitle {
+            margin: 0;
+            padding-top: 0.3rem;
+            color: #666;
+            font-size: 0.95rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -176,7 +198,7 @@ TRANSLATIONS = {
 }
 
 # ==========================================
-# 4. SIDEBAR: CLEAN CURRENCY SELECTOR
+# 4. SIDEBAR: SAUBERE WÄHRUNGSAUSWAHL (DROPDOWN)
 # ==========================================
 currency = st.sidebar.selectbox(
     "Währung / Currency",
@@ -189,14 +211,14 @@ t = TRANSLATIONS[lang]
 curr_symbol = "$" if currency == "USD" else "€"
 
 # ==========================================
-# 5. FIXIERTER (STICKY) HEADER (SAUBER ANGEPASST)
+# 5. FIXIERTER (STICKY) HEADER
 # ==========================================
-header_container = st.container()
-with header_container:
-    st.markdown('<div class="sticky-header">', unsafe_allow_html=True)
-    st.title(t["title"])
-    st.caption(t["subtitle"])
-    st.markdown('</div>', unsafe_allow_html=True)
+st.markdown(f"""
+    <div class="sticky-header-box">
+        <h1 class="sticky-title">{t['title']}</h1>
+        <p class="sticky-subtitle">{t['subtitle']}</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 6. DATA FETCHING (LIVE & HISTORICAL)
@@ -262,7 +284,7 @@ def fetch_historical_series(start_date):
 
 live_data = fetch_live_data()
 
-# Aktuelle Preise
+# Aktuelle Preise berechnen
 if currency == "EUR":
     btc_price_curr = live_data["btc_usd"] / live_data["eur_usd"]
     mstr_price_curr = live_data["mstr_usd"] / live_data["eur_usd"]
