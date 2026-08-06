@@ -6,7 +6,7 @@ import pandas as pd
 import json
 
 # ==========================================
-# 1. STREAMLIT PAGE CONFIG & CLEAN STICKY CSS
+# 1. STREAMLIT PAGE CONFIG & DYNAMIC THEME CSS
 # ==========================================
 st.set_page_config(
     page_title="Saylor Engine Dashboard",
@@ -14,6 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# Nutzt Streamlit CSS-Variablen für automatische Dark- & Light-Mode Kompatibilität
 st.markdown("""
     <style>
         header[data-testid="stHeader"] {
@@ -27,10 +28,11 @@ st.markdown("""
             position: -webkit-sticky;
             position: sticky;
             top: 0;
-            background-color: var(--background-color, #ffffff);
+            background-color: var(--background-color);
+            color: var(--text-color);
             z-index: 9999;
             padding: 0.8rem 0 0.8rem 0;
-            border-bottom: 1px solid rgba(49, 51, 63, 0.1);
+            border-bottom: 1px solid var(--gray-30, rgba(128, 128, 128, 0.2));
             margin-bottom: 1.5rem;
         }
         .sticky-title {
@@ -39,12 +41,14 @@ st.markdown("""
             font-size: 2.2rem;
             font-weight: 700;
             line-height: 1.2;
+            color: var(--text-color);
         }
         .sticky-subtitle {
             margin: 0;
             padding-top: 0.3rem;
-            color: #666;
+            opacity: 0.7;
             font-size: 0.95rem;
+            color: var(--text-color);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -121,7 +125,7 @@ TRANSLATIONS = {
         "footer_sources_md": """
         **Verifizierte Datenquellen:**
         * **JSON Tracker (`mstr_treasury_history.json`):**
-          * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe, `effective_diluted_shares` & Satoshis pro Aktie.
+          * Tagesgenaue Aufschlüsselung der physischen BTC-Käufe, `effective_diluted_shares` & Satoshis pro Aktie via [Saylor Tracker](https://saylortracker.com/).
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hartcodierte historische Cash-Reserven).
         * **Marktdaten & Wechselkurse:**
@@ -159,7 +163,7 @@ TRANSLATIONS = {
         "footer_sources_md": """
         **Verified Data Sources:**
         * **JSON Tracker (`mstr_treasury_history.json`):**
-          * Daily resolution of physical BTC purchases, `effective_diluted_shares` & Satoshis per share.
+          * Daily resolution of physical BTC purchases, `effective_diluted_shares` & Satoshis per share sourced from [Saylor Tracker](https://saylortracker.com/).
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Form 8-K, 10-Q & 10-K (Hardcoded historical cash reserves).
         * **Market Data & FX Rates:**
@@ -361,7 +365,7 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 10. PLOTLY SNAPSHOT CHART
+# 10. PLOTLY SNAPSHOT CHART (DARK/LIGHT ADAPTIVE)
 # ==========================================
 fig_bar = go.Figure()
 
@@ -405,10 +409,10 @@ fig_bar.update_layout(
     barmode="stack",
     title=dict(
         text=t["chart_title"],
-        font=dict(size=20, color="#31333F", family="Source Sans Pro, sans-serif")
+        font=dict(size=20)
     ),
     yaxis_title="Satoshis (Sats)",
-    template="plotly_white",
+    template="none",  # Nutzt dynamisch den Streamlit Theme-Hintergrund
     height=450,
     margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
@@ -444,7 +448,6 @@ try:
     with open("mstr_treasury_history.json", "r") as f:
         json_raw = json.load(f)
     
-    # Verschachtelten Pfad extrahieren: MSTR -> historicalData
     if "MSTR" in json_raw and "historicalData" in json_raw["MSTR"]:
         hist_data = json_raw["MSTR"]["historicalData"]
     elif "historicalData" in json_raw:
@@ -452,28 +455,22 @@ try:
     else:
         hist_data = json_raw
 
-    # Primär effective_diluted_shares nutzen, alternativ fallback auf effective_shares
     diluted_shares_series = hist_data.get("effective_diluted_shares", hist_data.get("effective_shares", [None]*len(hist_data["dates"])))
 
-    # Erstelle DataFrame aus den parallelen Arrays der Saylor-Struktur
     df_j = pd.DataFrame({
         "dates": hist_data["dates"],
         "btc_per_share": hist_data.get("btc_per_share", [None]*len(hist_data["dates"])),
         "effective_diluted_shares": diluted_shares_series
     })
 
-    # Datum parsen und als Index setzen
     df_j['parsed_date'] = pd.to_datetime(df_j['dates']).dt.tz_localize(None)
     df_j = df_j.sort_values('parsed_date').drop_duplicates('parsed_date', keep='last')
     df_j.set_index('parsed_date', inplace=True)
 
-    # btc_per_share (in BTC) -> umrechnen in Satoshis (* 100 Mio.)
     df_j['btc_per_share_sats'] = pd.to_numeric(df_j['btc_per_share'], errors='coerce') * SATS_PER_BTC
 
-    # Auf die Tages-Zeitachse des Charts reindexieren und Stufen füllen (ffill)
     merged_df['btc_per_share_sats'] = df_j['btc_per_share_sats'].reindex(merged_df.index).ffill().bfill()
 
-    # Diluted Shares out verarbeiten
     if 'effective_diluted_shares' in df_j.columns and df_j['effective_diluted_shares'].notna().any():
         merged_df['shares_out'] = pd.to_numeric(df_j['effective_diluted_shares'], errors='coerce').reindex(merged_df.index).ffill().bfill()
     else:
@@ -497,7 +494,7 @@ merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + 
 hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART
+# 12. PLOTLY HISTORICAL TIMELINE CHART (DARK/LIGHT ADAPTIVE)
 # ==========================================
 fig_line = go.Figure()
 
@@ -508,7 +505,7 @@ fig_line.add_trace(go.Scatter(
     mode='lines',
     name='Free Market Value (Sats / Share)',
     fill='tozeroy',
-    fillcolor='rgba(41, 182, 246, 0.08)',
+    fillcolor='rgba(41, 182, 246, 0.1)',
     line=dict(color='#29B6F6', width=2),
     customdata=merged_df[mstr_col],
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value / Share:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
@@ -530,7 +527,7 @@ fig_line.add_trace(go.Scatter(
     y=merged_df['btc_per_share_sats'],
     mode='lines',
     name=t["line_btc"],
-    line=dict(color='#2E7D32', width=3),
+    line=dict(color='#4CAF50', width=3),
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share (JSON):</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
@@ -548,11 +545,11 @@ fig_line.add_trace(go.Scatter(
 fig_line.update_layout(
     title=dict(
         text=t["timeline_title"],
-        font=dict(size=20, color="#31333F", family="Source Sans Pro, sans-serif")
+        font=dict(size=20)
     ),
     xaxis_title="Datum",
     yaxis_title="Satoshis pro Aktie (Sats / Share)",
-    template="plotly_white",
+    template="none",  # Passt sich automatisch an Dark / Light Mode an
     height=600,
     margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
