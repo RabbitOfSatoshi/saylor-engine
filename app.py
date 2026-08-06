@@ -15,8 +15,7 @@ st.set_page_config(
 
 # ==========================================
 # 2. HISTORISCHE SEC-TRANSAKTIONSDATENBANK (MSTR)
-# Format: (Datum, BTC_Delta, Aktienanzahl_Absolut_oder_Delta)
-# Inklusive des Tax-Loss-Harvesting Verkaufs vom 22.12.2022!
+# Format: (Datum, BTC_Delta, Aktienanzahl_Absolut)
 # (Alle Daten Post-Split 10:1 bereinigt)
 # ==========================================
 MSTR_TRANSACTIONS = [
@@ -41,8 +40,8 @@ MSTR_TRANSACTIONS = [
     ("2022-04-05", 4167, 113000000),
     ("2022-06-29", 481, 113000000),
     ("2022-09-20", 301, 113000000),
-    ("2022-12-22", -704, 115000000), # <--- VERKAUF (Tax-Loss Harvesting)
-    ("2022-12-24", 810, 115000000),  # <--- Wiederkauf
+    ("2022-12-22", -704, 115000000), # VERKAUF (Tax-Loss Harvesting)
+    ("2022-12-24", 810, 115000000),  # Wiederkauf
     ("2022-12-28", 2384, 115000000),
     ("2023-03-27", 6455, 115000000),
     ("2023-04-05", 1045, 115000000),
@@ -73,8 +72,6 @@ MSTR_TRANSACTIONS = [
 
 df_tx = pd.DataFrame(MSTR_TRANSACTIONS, columns=["date", "btc_change", "shares_out"])
 df_tx['date'] = pd.to_datetime(df_tx['date'])
-
-# Kumulierte BTC-Bestände errechnen
 df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
 df_tx.set_index('date', inplace=True)
 
@@ -88,8 +85,8 @@ TRANSLATIONS = {
         "sidebar_settings": "🌐 Sprache & Währung",
         "sidebar_purchase": "🛒 Deine Kauf-Details",
         "purchase_date": "Kaufdatum wählen",
-        "shares_count": "Anzahl gekaufter MSTR-Aktien",
-        "hist_prices": "📌 **Automatisch ermittelte historische Kurse:**",
+        "shares_count": "Anzahl gekaufter MSTR-Aktien (heutige Post-Split Einheiten)",
+        "hist_prices": "📌 **Automatisch ermittelte historische Kurse (Split-bereinigt):**",
         "sidebar_sim": "🎛️ Markt-Simulation",
         "sim_premium": "Simuliertes NAV-Aufgeld/Rabatt (%)",
         "metric_return": "Fiat Wertentwicklung",
@@ -115,8 +112,8 @@ TRANSLATIONS = {
         "sidebar_settings": "🌐 Language & Currency",
         "sidebar_purchase": "🛒 Your Purchase Details",
         "purchase_date": "Select Purchase Date",
-        "shares_count": "Number of MSTR Shares Bought",
-        "hist_prices": "📌 **Automatically fetched historical prices:**",
+        "shares_count": "Number of MSTR Shares (Post-Split units)",
+        "hist_prices": "📌 **Automatically fetched historical prices (Split-adjusted):**",
         "sidebar_sim": "🎛️ Market Simulation",
         "sim_premium": "Simulated NAV Premium/Discount (%)",
         "metric_return": "Fiat Return",
@@ -144,7 +141,7 @@ TRANSLATIONS = {
 st.sidebar.header("🌐 Language / Währung")
 currency = st.sidebar.radio(
     "Select Currency / Währung wählen",
-    options=["USD", "EUR"],  # Standard: USD
+    options=["USD", "EUR"],
     index=0
 )
 
@@ -187,9 +184,10 @@ def fetch_live_data():
 def fetch_historical_series(start_date):
     start_str = start_date.strftime('%Y-%m-%d')
     try:
-        mstr_df = yf.Ticker("MSTR").history(start=start_str)['Close']
-        btc_df = yf.Ticker("BTC-USD").history(start=start_str)['Close']
-        eur_df = yf.Ticker("EURUSD=X").history(start=start_str)['Close']
+        # auto_adjust=True stellt sicher, dass historische Kurse an heutige Aktienanzahl angepasst sind!
+        mstr_df = yf.Ticker("MSTR").history(start=start_str, auto_adjust=True)['Close']
+        btc_df = yf.Ticker("BTC-USD").history(start=start_str, auto_adjust=True)['Close']
+        eur_df = yf.Ticker("EURUSD=X").history(start=start_str, auto_adjust=True)['Close']
 
         df = pd.DataFrame({
             "mstr_usd": mstr_df,
@@ -240,14 +238,27 @@ purchase_date = st.sidebar.date_input(
     max_value=date.today() - timedelta(days=2)
 )
 
-user_shares = st.sidebar.number_input(
+# Nutzer gibt heutige (Post-Split) Aktien ein
+user_shares_input = st.sidebar.number_input(
     t["shares_count"], 
-    min_value=1, value=1, step=1  # Standard: 1 Share
+    min_value=1, value=1, step=1
 )
+
+# 10:1 Split Datum: 8. August 2024
+SPLIT_DATE = date(2024, 8, 8)
+
+# Falls Kauf VOR dem Split war und der Nutzer die DAMALIGE Aktienanzahl meint, 
+# rechnet die Engine intern mit der heutigen Anzahl (x10).
+# Da Yahoo Finance Kurse post-split anzeigt, müssen auch die Shares post-split sein.
+if purchase_date < SPLIT_DATE:
+    # 1 historische Aktie entspricht 10 heutigen Einheiten
+    effective_user_shares = user_shares_input * 10
+else:
+    effective_user_shares = user_shares_input
 
 hist_df = fetch_historical_series(purchase_date)
 
-# Kaufkurse sicher ermitteln
+# Kaufkurse sicher ermitteln (Yahoo liefert split-adjusted Preise)
 if not hist_df.empty:
     if currency == "EUR":
         mstr_price_past = float(hist_df['mstr_eur'].iloc[0])
@@ -256,8 +267,8 @@ if not hist_df.empty:
         mstr_price_past = float(hist_df['mstr_usd'].iloc[0])
         btc_price_past = float(hist_df['btc_usd'].iloc[0])
 else:
-    mstr_price_past = 63.00 if currency == "USD" else 57.92
-    btc_price_past = 42000.0 if currency == "USD" else 38800.0
+    mstr_price_past = 48.21 if currency == "USD" else 44.00
+    btc_price_past = 42511.0 if currency == "USD" else 39000.0
 
 st.sidebar.markdown("---")
 st.sidebar.caption(t["hist_prices"])
@@ -281,22 +292,24 @@ mstr_price_simulated = mstr_price_curr * premium_factor
 # ==========================================
 SATS_PER_BTC = 100_000_000
 
-total_invest = user_shares * mstr_price_past
+# Wichtig: Investition basiert auf den Post-Split Shares * Post-Split Kaufpreis 
+# (oder Pre-Split Shares * Pre-Split Kaufpreis, was mathematisch identisch ist!)
+total_invest = effective_user_shares * mstr_price_past
 
 # Step 1: HODL Benchmark
 hodl_benchmark_sats = (total_invest / btc_price_past) * SATS_PER_BTC
 
 # Step 2: Free Market Today
-market_value_fiat = user_shares * mstr_price_simulated
+market_value_fiat = effective_user_shares * mstr_price_simulated
 market_value_sats = (market_value_fiat / btc_price_curr) * SATS_PER_BTC
 
 # Step 3: Saylor Engine (Internal BTC)
 current_btc_per_share = live_data["mstr_btc"] / live_data["mstr_shares"]
-internal_btc_sats = user_shares * current_btc_per_share * SATS_PER_BTC
+internal_btc_sats = effective_user_shares * current_btc_per_share * SATS_PER_BTC
 
 # Step 4: Dry Powder (Cash-to-Sats)
 cash_per_share_usd = live_data["mstr_cash_usd"] / live_data["mstr_shares"]
-total_user_cash_usd = user_shares * cash_per_share_usd
+total_user_cash_usd = effective_user_shares * cash_per_share_usd
 internal_cash_sats = (total_user_cash_usd / live_data["btc_usd"]) * SATS_PER_BTC
 
 # Step 5: Total Substance
@@ -395,7 +408,7 @@ st.plotly_chart(fig_bar, use_container_width=True)
 st.markdown("---")
 st.subheader(t["timeline_title"])
 
-# Indizes bereinigen (Zeitzonen sicher entfernen)
+# Indizes bereinigen
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
@@ -404,7 +417,7 @@ treasury_daily = df_tx.reindex(
     hist_df_clean.index.union(df_tx.index)
 ).ffill().reindex(hist_df_clean.index)
 
-# Standard-Fallbacks falls vor der ersten Transaktion
+# Fallbacks
 treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(21454)
 treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(96000000)
 
@@ -418,10 +431,10 @@ mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
 # 1. Freimarktwert in Sats
-merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
+merged_df['market_sats'] = ((effective_user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
 
 # 2. Physische BTC-Deckung pro Aktie in Sats
-merged_df['internal_btc_sats'] = (user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
+merged_df['internal_btc_sats'] = (effective_user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
 
 # 3. Total Substance (+ Cash Reserve)
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] * 1.05
