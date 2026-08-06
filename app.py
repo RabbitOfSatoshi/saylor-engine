@@ -13,8 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Sauberes CSS: Entfernt das 'undefined' bei Plotly, blendet den Streamlit-Header aus
-# und erstellt eine kompakte, fixierte Überschrift ganz oben.
+# Sauberes CSS: Entfernt Streamlits Header und setzt den eigenen Sticky-Header ganz oben an.
 st.markdown("""
     <style>
         /* 1. Unnötige Streamlit-Top-Bar ausblenden */
@@ -28,7 +27,7 @@ st.markdown("""
             padding-bottom: 2rem !important;
         }
 
-        /* 3. Reiner Sticky-Header-Style (verhindert 'undefined' bei Plotly) */
+        /* 3. Reiner Sticky-Header-Style */
         .sticky-header-box {
             position: -webkit-sticky;
             position: sticky;
@@ -198,7 +197,7 @@ TRANSLATIONS = {
 }
 
 # ==========================================
-# 4. SIDEBAR: SAUBERE WÄHRUNGSAUSWAHL (DROPDOWN)
+# 4. SIDEBAR: WÄHRUNGSAUSWAHL (DROPDOWN)
 # ==========================================
 currency = st.sidebar.selectbox(
     "Währung / Currency",
@@ -403,10 +402,8 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 10. PLOTLY SNAPSHOT CHART
+# 10. PLOTLY SNAPSHOT CHART (NATIVE TITLE)
 # ==========================================
-st.subheader(t["chart_title"])
-
 fig_bar = go.Figure()
 
 fig_bar.add_trace(go.Bar(
@@ -447,10 +444,14 @@ fig_bar.add_trace(go.Bar(
 
 fig_bar.update_layout(
     barmode="stack",
-    title=None,
+    title=dict(
+        text=t["chart_title"],
+        font=dict(size=20, color="#31333F", family="Source Sans Pro, sans-serif")
+    ),
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=450,
+    margin=dict(t=50, b=20, l=10, r=10),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
@@ -460,7 +461,6 @@ st.plotly_chart(fig_bar, use_container_width=True)
 # 11. HISTORICAL TIMELINE ENGINE
 # ==========================================
 st.markdown("---")
-st.subheader(t["timeline_title"])
 
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
@@ -488,7 +488,7 @@ merged_df['internal_cash_sats'] = (user_shares * (merged_df['cash_per_share_usd'
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] + merged_df['internal_cash_sats']
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART
+# 12. PLOTLY HISTORICAL TIMELINE CHART (NATIVE TITLE)
 # ==========================================
 fig_line = go.Figure()
 
@@ -527,11 +527,15 @@ fig_line.add_trace(go.Scatter(
 ))
 
 fig_line.update_layout(
-    title=None,
+    title=dict(
+        text=t["timeline_title"],
+        font=dict(size=20, color="#31333F", family="Source Sans Pro, sans-serif")
+    ),
     xaxis_title="Datum",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=550,
+    margin=dict(t=50, b=20, l=10, r=10),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
