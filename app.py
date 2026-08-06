@@ -14,62 +14,69 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. HISTORISCHE SEC-FILING DATENBANK (MSTR)
+# 2. HISTORISCHE SEC-TRANSAKTIONSDATENBANK (MSTR)
+# Format: (Datum, BTC_Delta, Aktienanzahl_Absolut_oder_Delta)
+# Inklusive des Tax-Loss-Harvesting Verkaufs vom 22.12.2022!
 # (Alle Daten Post-Split 10:1 bereinigt)
 # ==========================================
-MSTR_BUY_HISTORY = [
+MSTR_TRANSACTIONS = [
     ("2020-08-11", 21454, 96000000),
-    ("2020-09-14", 38250, 96000000),
-    ("2020-12-04", 40824, 96000000),
-    ("2020-12-21", 70470, 97000000),
-    ("2021-01-22", 70784, 97000000),
-    ("2021-02-02", 71079, 97000000),
-    ("2021-02-24", 90531, 99000000),
-    ("2021-03-01", 90855, 99000000),
-    ("2021-03-05", 91064, 99000000),
-    ("2021-03-12", 91326, 99000000),
-    ("2021-04-05", 91579, 99000000),
-    ("2021-05-13", 91850, 99000000),
-    ("2021-05-18", 92079, 99000000),
-    ("2021-06-21", 105085, 107000000),
-    ("2021-09-12", 114042, 107000000),
-    ("2021-12-09", 122478, 112000000),
-    ("2021-12-30", 124391, 112000000),
-    ("2022-01-31", 125051, 112000000),
-    ("2022-04-05", 129218, 113000000),
-    ("2022-06-29", 129699, 113000000),
-    ("2022-09-20", 130000, 113000000),
-    ("2022-12-28", 132500, 115000000),
-    ("2023-03-27", 138955, 115000000),
-    ("2023-04-05", 140000, 115000000),
-    ("2023-06-28", 152333, 126000000),
-    ("2023-07-31", 152800, 126000000),
-    ("2023-09-24", 158245, 137000000),
-    ("2023-11-30", 174530, 148000000),
-    ("2023-12-27", 189150, 161000000),
-    ("2024-01-31", 190000, 161000000),
-    ("2024-02-26", 193000, 170000000),
-    ("2024-03-11", 205000, 177000000),
-    ("2024-03-19", 214246, 177000000),
-    ("2024-04-26", 214400, 177000000),
-    ("2024-06-20", 226331, 177000000),
-    ("2024-08-01", 226500, 177000000),
-    ("2024-09-13", 244800, 197000000),
-    ("2024-09-20", 252220, 203000000),
-    ("2024-11-11", 279420, 222000000),
-    ("2024-11-18", 331200, 256000000),
-    ("2024-11-25", 386700, 280000000),
-    ("2024-12-02", 402100, 290000000),
-    ("2024-12-09", 423650, 305000000),
-    ("2025-01-01", 447370, 320000000),
-    ("2025-06-01", 600000, 340000000),
-    ("2026-01-01", 750000, 350000000),
-    ("2026-08-01", 842138, 353900000)
+    ("2020-09-14", 16796, 96000000),
+    ("2020-12-04", 2574, 96000000),
+    ("2020-12-21", 29646, 97000000),
+    ("2021-01-22", 314, 97000000),
+    ("2021-02-02", 295, 97000000),
+    ("2021-02-24", 19452, 99000000),
+    ("2021-03-01", 324, 99000000),
+    ("2021-03-05", 209, 99000000),
+    ("2021-03-12", 262, 99000000),
+    ("2021-04-05", 253, 99000000),
+    ("2021-05-13", 271, 99000000),
+    ("2021-05-18", 229, 99000000),
+    ("2021-06-21", 13006, 107000000),
+    ("2021-09-12", 8957, 107000000),
+    ("2021-12-09", 8436, 112000000),
+    ("2021-12-30", 1913, 112000000),
+    ("2022-01-31", 660, 112000000),
+    ("2022-04-05", 4167, 113000000),
+    ("2022-06-29", 481, 113000000),
+    ("2022-09-20", 301, 113000000),
+    ("2022-12-22", -704, 115000000), # <--- VERKAUF (Tax-Loss Harvesting)
+    ("2022-12-24", 810, 115000000),  # <--- Wiederkauf
+    ("2022-12-28", 2384, 115000000),
+    ("2023-03-27", 6455, 115000000),
+    ("2023-04-05", 1045, 115000000),
+    ("2023-06-28", 12333, 126000000),
+    ("2023-07-31", 467, 126000000),
+    ("2023-09-24", 5445, 137000000),
+    ("2023-11-30", 16285, 148000000),
+    ("2023-12-27", 14620, 161000000),
+    ("2024-01-31", 850, 161000000),
+    ("2024-02-26", 3000, 170000000),
+    ("2024-03-11", 12000, 177000000),
+    ("2024-03-19", 9246, 177000000),
+    ("2024-04-26", 154, 177000000),
+    ("2024-06-20", 11931, 177000000),
+    ("2024-08-01", 169, 177000000),
+    ("2024-09-13", 18300, 197000000),
+    ("2024-09-20", 7420, 203000000),
+    ("2024-11-11", 27200, 222000000),
+    ("2024-11-18", 51780, 256000000),
+    ("2024-11-25", 55500, 280000000),
+    ("2024-12-02", 15400, 290000000),
+    ("2024-12-09", 21550, 305000000),
+    ("2025-01-01", 23720, 320000000),
+    ("2025-06-01", 152630, 340000000),
+    ("2026-01-01", 150000, 350000000),
+    ("2026-08-01", 92138, 353900000)
 ]
 
-df_treasury = pd.DataFrame(MSTR_BUY_HISTORY, columns=["date", "btc_holdings", "shares_out"])
-df_treasury['date'] = pd.to_datetime(df_treasury['date'])
-df_treasury.set_index('date', inplace=True)
+df_tx = pd.DataFrame(MSTR_TRANSACTIONS, columns=["date", "btc_change", "shares_out"])
+df_tx['date'] = pd.to_datetime(df_tx['date'])
+
+# Kumulierte BTC-Bestände errechnen
+df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
+df_tx.set_index('date', inplace=True)
 
 # ==========================================
 # 3. TRANSLATIONS
@@ -90,7 +97,7 @@ TRANSLATIONS = {
         "metric_substance_sats": "Substance Yield (Firmen-Substanz)",
         "vs_hodl": "vs. Spot HODL",
         "chart_title": "Satoshi Multiplier Momentaufnahme",
-        "timeline_title": "📈 Satoshi Multiplier Zeitverlauf (Präzise Treasury-Historie)",
+        "timeline_title": "📈 Satoshi Multiplier Zeitverlauf (Exakte SEC Transaktions-Historie)",
         "bar_hodl": "1. Spot HODL Benchmark",
         "bar_market": "2. Free Market Value",
         "bar_substance": "3. Internal Asset Base",
@@ -137,13 +144,13 @@ TRANSLATIONS = {
 st.sidebar.header("🌐 Language / Währung")
 currency = st.sidebar.radio(
     "Select Currency / Währung wählen",
-    options=["EUR", "USD"],
+    options=["USD", "EUR"],  # Standard: USD
     index=0
 )
 
 lang = "DE" if currency == "EUR" else "EN"
 t = TRANSLATIONS[lang]
-curr_symbol = "€" if currency == "EUR" else "$"
+curr_symbol = "$" if currency == "USD" else "€"
 
 st.title(t["title"])
 st.caption(t["subtitle"])
@@ -178,9 +185,7 @@ def fetch_live_data():
 
 @st.cache_data(ttl=86400)
 def fetch_historical_series(start_date):
-    """Holt die tägliche Preis-Historie ab dem Kaufdatum."""
     start_str = start_date.strftime('%Y-%m-%d')
-    
     try:
         mstr_df = yf.Ticker("MSTR").history(start=start_str)['Close']
         btc_df = yf.Ticker("BTC-USD").history(start=start_str)['Close']
@@ -237,7 +242,7 @@ purchase_date = st.sidebar.date_input(
 
 user_shares = st.sidebar.number_input(
     t["shares_count"], 
-    min_value=1, value=100, step=1
+    min_value=1, value=1, step=1  # Standard: 1 Share
 )
 
 hist_df = fetch_historical_series(purchase_date)
@@ -251,8 +256,8 @@ if not hist_df.empty:
         mstr_price_past = float(hist_df['mstr_usd'].iloc[0])
         btc_price_past = float(hist_df['btc_usd'].iloc[0])
 else:
-    mstr_price_past = 57.92 if currency == "EUR" else 63.00
-    btc_price_past = 38800.0 if currency == "EUR" else 42000.0
+    mstr_price_past = 63.00 if currency == "USD" else 57.92
+    btc_price_past = 42000.0 if currency == "USD" else 38800.0
 
 st.sidebar.markdown("---")
 st.sidebar.caption(t["hist_prices"])
@@ -385,7 +390,7 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 10. HISTORICAL TIMELINE ENGINE (ROBUST JOIN)
+# 10. HISTORICAL TIMELINE ENGINE (EXAKTER MERGE)
 # ==========================================
 st.markdown("---")
 st.subheader(t["timeline_title"])
@@ -394,12 +399,12 @@ st.subheader(t["timeline_title"])
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
-# Treasury-Daten auf den Tages-Index des Preis-Dataframes abbilden
-treasury_daily = df_treasury.reindex(
-    hist_df_clean.index.union(df_treasury.index)
+# Dynamic Transaktions-Map auf den Tages-Index bringen
+treasury_daily = df_tx.reindex(
+    hist_df_clean.index.union(df_tx.index)
 ).ffill().reindex(hist_df_clean.index)
 
-# Fallbacks setzen
+# Standard-Fallbacks falls vor der ersten Transaktion
 treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(21454)
 treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(96000000)
 
