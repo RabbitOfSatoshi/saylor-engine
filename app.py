@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 from datetime import date, timedelta
 import pandas as pd
+import json
 
 # ==========================================
 # 1. STREAMLIT PAGE CONFIG & CLEAN STICKY CSS
@@ -57,65 +58,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. HISTORISCHE SEC-FILING DATENBANK
-# Format: (Datum, BTC_Delta, Aktienanzahl_PostSplit, Cash_USD, SEC_Quelle)
+# 2. HISTORISCHE SEC-DATENBANK (EXAKT AUS JSON GELADEN)
 # ==========================================
-MSTR_SEC_HISTORICAL_DATA = [
-    ("2020-08-11", 21454, 96000000, 50000000, "SEC Form 8-K (11.08.2020)"),
-    ("2020-09-14", 16796, 96000000, 50000000, "SEC Form 8-K (14.09.2020)"),
-    ("2020-12-04", 2574, 96000000, 45000000, "SEC Form 8-K (04.12.2020)"),
-    ("2020-12-21", 29646, 97000000, 60000000, "SEC Form 8-K (21.12.2020)"),
-    ("2021-01-22", 314, 97000000, 60000000, "SEC Form 8-K (22.01.2021)"),
-    ("2021-02-02", 295, 97000000, 60000000, "SEC Form 8-K (02.02.2021)"),
-    ("2021-02-24", 19452, 99000000, 70000000, "SEC Form 8-K (24.02.2021)"),
-    ("2021-03-01", 324, 99000000, 70000000, "SEC Form 8-K (01.03.2021)"),
-    ("2021-03-05", 209, 99000000, 70000000, "SEC Form 8-K (05.03.2021)"),
-    ("2021-03-12", 262, 99000000, 70000000, "SEC Form 8-K (12.03.2021)"),
-    ("2021-04-05", 253, 99000000, 70000000, "SEC Form 8-K (05.04.2021)"),
-    ("2021-05-13", 271, 99000000, 70000000, "SEC Form 8-K (13.05.2021)"),
-    ("2021-05-18", 229, 99000000, 70000000, "SEC Form 8-K (18.05.2021)"),
-    ("2021-06-21", 13006, 107000000, 80000000, "SEC Form 8-K (21.06.2021)"),
-    ("2021-09-12", 8957, 107000000, 85000000, "SEC Form 8-K (12.09.2021)"),
-    ("2021-12-09", 8436, 112000000, 90000000, "SEC Form 8-K (09.12.2021)"),
-    ("2021-12-30", 1913, 112000000, 90000000, "SEC Form 8-K (30.12.2021)"),
-    ("2022-01-31", 660, 112000000, 80000000, "SEC Form 8-K (31.01.2022)"),
-    ("2022-04-05", 4167, 113000000, 70000000, "SEC Form 8-K (05.04.2022)"),
-    ("2022-06-29", 481, 113000000, 60000000, "SEC Form 8-K (29.06.2022)"),
-    ("2022-09-20", 301, 113000000, 65000000, "SEC Form 8-K (20.09.2022)"),
-    ("2022-12-22", -704, 115000000, 50000000, "SEC Form 8-K (22.12.2022) - Tax-Loss Sale"),
-    ("2022-12-24", 810, 115000000, 50000000, "SEC Form 8-K (24.12.2022) - Buyback"),
-    ("2022-12-28", 2384, 115000000, 50000000, "SEC Form 8-K (28.12.2022)"),
-    ("2023-03-27", 6455, 115000000, 50000000, "SEC Form 8-K (27.03.2023)"),
-    ("2023-04-05", 1045, 115000000, 50000000, "SEC Form 8-K (05.04.2023)"),
-    ("2023-06-28", 12333, 126000000, 60000000, "SEC Form 8-K (28.06.2023)"),
-    ("2023-07-31", 467, 126000000, 65000000, "SEC Form 8-K (31.07.2023)"),
-    ("2023-09-24", 5445, 137000000, 45000000, "SEC Form 8-K (24.09.2023)"),
-    ("2023-11-30", 16285, 148000000, 45000000, "SEC Form 8-K (30.11.2023)"),
-    ("2023-12-27", 14620, 161000000, 46800000, "SEC Form 10-K FY2023 (27.12.2023)"),
-    ("2024-01-31", 850, 161000000, 46800000, "SEC Form 8-K (31.01.2024)"),
-    ("2024-02-26", 3000, 170000000, 50000000, "SEC Form 8-K (26.02.2024)"),
-    ("2024-03-11", 12000, 177000000, 55000000, "SEC Form 8-K (11.03.2024)"),
-    ("2024-03-19", 9246, 177000000, 57000000, "SEC Form 8-K (19.03.2024)"),
-    ("2024-04-26", 154, 177000000, 57000000, "SEC Form 10-Q Q1 (26.04.2024)"),
-    ("2024-06-20", 11931, 177000000, 60000000, "SEC Form 8-K (20.06.2024)"),
-    ("2024-08-01", 169, 177000000, 60000000, "SEC Form 10-Q Q2 (01.08.2024)"),
-    ("2024-09-13", 18300, 197000000, 100000000, "SEC Form 8-K (13.09.2024)"),
-    ("2024-09-20", 7420, 203000000, 120000000, "SEC Form 8-K (20.09.2024)"),
-    ("2024-11-11", 27200, 222000000, 200000000, "SEC Form 8-K (11.11.2024)"),
-    ("2024-11-18", 51780, 256000000, 500000000, "SEC Form 8-K (18.11.2024)"),
-    ("2024-11-25", 55500, 280000000, 1000000000, "SEC Form 8-K (25.11.2024)"),
-    ("2024-12-02", 15400, 290000000, 1500000000, "SEC Form 8-K (02.12.2024)"),
-    ("2024-12-09", 21550, 305000000, 2000000000, "SEC Form 8-K (09.12.2024)"),
-    ("2025-01-01", 23720, 320000000, 2500000000, "SEC Form 10-K FY2024 (01.01.2025)"),
-    ("2025-06-01", 152630, 340000000, 3200000000, "SEC Form 10-Q Q2 (01.06.2025)"),
-    ("2026-01-01", 150000, 350000000, 3800000000, "SEC Form 10-K FY2025 (01.01.2026)"),
-    ("2026-08-01", 92138, 353900000, 4000000000, "SEC Form 10-Q Q2 (01.08.2026)")
-]
+JSON_FILENAME = "mstr_treasury_history.json"
 
-df_tx = pd.DataFrame(
-    MSTR_SEC_HISTORICAL_DATA, 
-    columns=["date", "btc_change", "shares_out", "cash_usd", "source"]
-)
+try:
+    with open(JSON_FILENAME, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+    df_tx = pd.DataFrame(json_data)
+except FileNotFoundError:
+    st.error(f"Datei '{JSON_FILENAME}' wurde nicht gefunden! Bitte stelle sicher, dass sie im selben Ordner wie app.py liegt.")
+    st.stop()
+
+# Konvertierung und Kumulierung der Daten
 df_tx['date'] = pd.to_datetime(df_tx['date'])
 df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
 df_tx.set_index('date', inplace=True)
@@ -153,8 +108,7 @@ TRANSLATIONS = {
         "footer_sources_md": """
         **Verifizierte Datenquellen:**
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
-          * Form 8-K (Tagesgenaue BTC-Käufe & Verkäufe)
-          * Form 10-Q & 10-K (Quartalsweise Cash-Reserven & Aktien im Umlauf)
+          * Dynamisch geladen aus `mstr_treasury_history.json` (Form 8-K, 10-Q & 10-K)
         * **Marktdaten & Wechselkurse:**
           * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt (10:1 Split vom 08.08.2024).
         """
@@ -188,8 +142,7 @@ TRANSLATIONS = {
         "footer_sources_md": """
         **Verified Data Sources:**
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
-          * Form 8-K (Daily BTC purchases & sales)
-          * Form 10-Q & 10-K (Quarterly cash reserves & shares outstanding)
+          * Dynamically loaded from `mstr_treasury_history.json` (Form 8-K, 10-Q & 10-K)
         * **Market Data & FX Rates:**
           * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted (10:1 split on Aug 8, 2024).
         """
@@ -224,13 +177,15 @@ st.markdown(f"""
 # ==========================================
 @st.cache_data(ttl=3600)
 def fetch_live_data():
+    # Holt stets die aktuellsten Werte aus der JSON-Tabelle für die Live-Berechnung
+    latest_sec = df_tx.iloc[-1]
     defaults = {
         "btc_usd": 65000.0,
         "mstr_usd": 135.0,
         "eur_usd": 1.08,
-        "mstr_shares": 353_900_000,
-        "mstr_btc": 842_138,
-        "mstr_cash_usd": 4_000_000_000
+        "mstr_shares": int(latest_sec.get('shares_out', 353_900_000)),
+        "mstr_btc": int(latest_sec.get('btc_holdings', 842_138)),
+        "mstr_cash_usd": float(latest_sec.get('cash_usd', 4_000_000_000))
     }
     try:
         btc_usd = yf.Ticker("BTC-USD").history(period="1d")['Close'].iloc[-1]
@@ -402,7 +357,7 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 10. PLOTLY SNAPSHOT CHART (CLEAN TITLE & BOTTOM LEGEND)
+# 10. PLOTLY SNAPSHOT CHART
 # ==========================================
 fig_bar = go.Figure()
 
@@ -451,33 +406,40 @@ fig_bar.update_layout(
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=480,
-    margin=dict(t=50, b=80, l=10, r=10),
+    margin=dict(t=50, b=30, l=10, r=10),
     legend=dict(
-        orientation="h",
+        orientation="v",
         yanchor="top",
-        y=-0.15,
-        xanchor="center",
-        x=0.5
+        y=0.98,
+        xanchor="right",
+        x=0.99,
+        bgcolor="rgba(255, 255, 255, 0.8)"
     )
 )
 
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. HISTORICAL TIMELINE ENGINE
+# 11. HISTORICAL TIMELINE ENGINE (VERBINDUNG DATENBANK <-> HISTORIE)
 # ==========================================
 st.markdown("---")
 
 hist_df_clean = hist_df.copy()
 hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
 
+# Tagesgenaue Re-Indexierung der SEC-Filings über den Verlaufszeitraum
 treasury_daily = df_tx.reindex(
     hist_df_clean.index.union(df_tx.index)
 ).ffill().reindex(hist_df_clean.index)
 
-treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(21454)
-treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(96000000)
-treasury_daily['cash_usd'] = treasury_daily['cash_usd'].fillna(50000000)
+# Standardwerte absichern, falls Startdatum vor dem ersten Filing liegt
+first_btc = df_tx['btc_holdings'].iloc[0] if not df_tx.empty else 21454
+first_shares = df_tx['shares_out'].iloc[0] if not df_tx.empty else 96000000
+first_cash = df_tx['cash_usd'].iloc[0] if not df_tx.empty else 50000000
+
+treasury_daily['btc_holdings'] = treasury_daily['btc_holdings'].fillna(first_btc)
+treasury_daily['shares_out'] = treasury_daily['shares_out'].fillna(first_shares)
+treasury_daily['cash_usd'] = treasury_daily['cash_usd'].fillna(first_cash)
 
 merged_df = hist_df_clean.copy()
 merged_df['btc_holdings'] = treasury_daily['btc_holdings']
@@ -487,17 +449,21 @@ merged_df['cash_usd'] = treasury_daily['cash_usd']
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
+# Berechnungen für JEDEN Tag in der Zeitreihe:
 merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
-merged_df['internal_btc_sats'] = (user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
+merged_df['btc_per_share_sats'] = (merged_df['btc_holdings'] / merged_df['shares_out']) * SATS_PER_BTC
+merged_df['internal_btc_sats'] = user_shares * merged_df['btc_per_share_sats']
 merged_df['cash_per_share_usd'] = merged_df['cash_usd'] / merged_df['shares_out']
 merged_df['internal_cash_sats'] = (user_shares * (merged_df['cash_per_share_usd'] / merged_df['btc_usd'])) * SATS_PER_BTC
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] + merged_df['internal_cash_sats']
+merged_df['treasury_per_share_fiat'] = (merged_df['btc_per_share_sats'] / SATS_PER_BTC) * merged_df[btc_col]
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART (CLEAN TITLE & BOTTOM LEGEND)
+# 12. PLOTLY HISTORICAL TIMELINE CHART
 # ==========================================
 fig_line = go.Figure()
 
+# Market Value Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['market_sats'],
@@ -505,31 +471,40 @@ fig_line.add_trace(go.Scatter(
     name='Free Market Value (Sats)',
     fill='tozeroy',
     fillcolor='rgba(41, 182, 246, 0.08)',
-    line=dict(color='#29B6F6', width=2)
+    line=dict(color='#29B6F6', width=2),
+    customdata=merged_df[mstr_col],
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
 ))
 
+# Spot HODL Benchmark Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=[hodl_benchmark_sats] * len(merged_df),
     mode='lines',
     name='Spot HODL Benchmark',
-    line=dict(color='#F7931A', width=2, dash='dash')
+    line=dict(color='#F7931A', width=2, dash='dash'),
+    hovertemplate="<b>Spot Benchmark:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
+# Internal BTC Base Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['internal_btc_sats'],
     mode='lines',
-    name='Internal BTC Base (SEC Filings)',
-    line=dict(color='#4CAF50', width=2.5)
+    name='BTC / Share in Satoshi',
+    line=dict(color='#4CAF50', width=2.5),
+    customdata=merged_df[['btc_per_share_sats', 'treasury_per_share_fiat']].values,
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{customdata[0]:,.0f} Sats<br><b>Treasury Value / Share:</b> " + curr_symbol + "%{customdata[1]:,.2f}<extra></extra>"
 ))
 
+# Total Substance Trace
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['total_substance_sats'],
     mode='lines',
     name='Total Asset Base (+ SEC Cash Reserve)',
-    line=dict(color='#81C784', width=1.5, dash='dot')
+    line=dict(color='#81C784', width=1.5, dash='dot'),
+    hovertemplate="<b>Total Substance:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
 fig_line.update_layout(
@@ -541,13 +516,14 @@ fig_line.update_layout(
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=580,
-    margin=dict(t=50, b=90, l=10, r=10),
+    margin=dict(t=50, b=30, l=10, r=10),
     legend=dict(
-        orientation="h",
+        orientation="v",
         yanchor="top",
-        y=-0.18,
-        xanchor="center",
-        x=0.5
+        y=0.98,
+        xanchor="right",
+        x=0.99,
+        bgcolor="rgba(255, 255, 255, 0.8)"
     )
 )
 
