@@ -1,29 +1,26 @@
 import streamlit as st
 import plotly.graph_objects as go
 import yfinance as yf
+from datetime import date, datetime, timedelta
 
 # ==========================================
 # 1. STREAMLIT PAGE CONFIG & STYLING
 # ==========================================
 st.set_page_config(
-    page_title="MSTR Satoshi Multiplier Dashboard",
-    page_icon="₿",
+    page_title="Saylor Engine Dashboard",
+    page_icon="⚡",
     layout="wide"
 )
 
-st.title("₿ Satoshi Multiplier Dashboard ($MSTR)")
-st.caption("Visualisierung des internen Bitcoin-Substanzgewinns von MicroStrategy vs. Spot HODL Benchmark")
+st.title("⚡ Saylor Engine ($MSTR)")
+st.caption("Automatisches Satoshi-Multiplier & Substanz-Dashboard")
 
 # ==========================================
-# 2. DATA FETCHING (LIVE & FALLBACKS)
+# 2. DATA FETCHING (LIVE & HISTORICAL)
 # ==========================================
-@st.cache_data(ttl=3600)  # Daten für 1 Std. cachen
+@st.cache_data(ttl=3600)
 def fetch_live_data():
-    """
-    Holt Live-Daten via Yahoo Finance.
-    Nutzt Fallback-Werte gemäß Prompt-Definition, falls APIs fehlschlagen.
-    """
-    # Standard Fallbacks laut Auftrag
+    """Holt aktuelle Live-Preise."""
     defaults = {
         "btc_usd": 65000.0,
         "mstr_usd": 135.0,
@@ -32,18 +29,10 @@ def fetch_live_data():
         "mstr_btc": 842_138,
         "mstr_cash_usd": 4_000_000_000
     }
-    
     try:
-        # Ticker laden
-        btc_ticker = yf.Ticker("BTC-USD")
-        mstr_ticker = yf.Ticker("MSTR")
-        eur_ticker = yf.Ticker("EURUSD=X")
-        
-        # Preise abfragen
-        btc_usd = btc_ticker.history(period="1d")['Close'].iloc[-1]
-        mstr_usd = mstr_ticker.history(period="1d")['Close'].iloc[-1]
-        eur_usd = eur_ticker.history(period="1d")['Close'].iloc[-1]
-        
+        btc_usd = yf.Ticker("BTC-USD").history(period="1d")['Close'].iloc[-1]
+        mstr_usd = yf.Ticker("MSTR").history(period="1d")['Close'].iloc[-1]
+        eur_usd = yf.Ticker("EURUSD=X").history(period="1d")['Close'].iloc[-1]
         return {
             "btc_usd": float(btc_usd),
             "mstr_usd": float(mstr_usd),
@@ -53,105 +42,143 @@ def fetch_live_data():
             "mstr_cash_usd": defaults["mstr_cash_usd"]
         }
     except Exception:
-        # Bei Fehler Fallback verwenden
         return defaults
+
+@st.cache_data(ttl=86400)
+def fetch_historical_prices(target_date):
+    """
+    Holt die historischen Schlusskurse für MSTR und BTC (in EUR) 
+    für ein bestimmtes Datum.
+    """
+    start_str = target_date.strftime('%Y-%m-%d')
+    end_date = target_date + timedelta(days=5) # Puffert Wochenenden ab
+    end_str = end_date.strftime('%Y-%m-%d')
+
+    try:
+        # Historische Kurse abrufen
+        mstr_hist = yf.Ticker("MSTR").history(start=start_str, end=end_str)
+        btc_hist = yf.Ticker("BTC-EUR").history(start=start_str, end=end_str)
+        
+        # Falls BTC-EUR nicht direkt greift:
+        if btc_hist.empty:
+            btc_usd_hist = yf.Ticker("BTC-USD").history(start=start_str, end=end_str)
+            eur_usd_hist = yf.Ticker("EURUSD=X").history(start=start_str, end=end_str)
+            btc_price = btc_usd_hist['Close'].iloc[0] / eur_usd_hist['Close'].iloc[0]
+        else:
+            btc_price = btc_hist['Close'].iloc[0]
+
+        mstr_price_usd = mstr_hist['Close'].iloc[0]
+        
+        # Wechselkurs am Tag des Kaufs
+        eur_usd_hist = yf.Ticker("EURUSD=X").history(start=start_str, end=end_str)
+        eur_rate = eur_usd_hist['Close'].iloc[0] if not eur_usd_hist.empty else 1.08
+        
+        mstr_price_eur = mstr_price_usd / eur_rate
+
+        return float(mstr_price_eur), float(btc_price)
+    except Exception:
+        # Fallback auf Standardwerte falls Datum fehlschlägt (z.B. Feiertage/Zukunft)
+        return 57.92, 38800.0
 
 live_data = fetch_live_data()
 
-# Umrechnung der Live-Preise in EUR
-btc_price_curr_usd = live_data["btc_usd"]
-mstr_price_curr_usd = live_data["mstr_usd"]
-eur_usd_curr = live_data["eur_usd"]
-
-btc_price_curr_eur = btc_price_curr_usd / eur_usd_curr
-mstr_price_curr_eur = mstr_price_curr_usd / eur_usd_curr
+# Umrechnung aktuelle Preise in EUR
+btc_price_curr_eur = live_data["btc_usd"] / live_data["eur_usd"]
+mstr_price_curr_eur = live_data["mstr_usd"] / live_data["eur_usd"]
 
 # ==========================================
-# 3. USER INPUTS (SIDEBAR)
+# 3. USER INPUTS (EINFACCH & AUTOMATISCH)
 # ==========================================
-st.sidebar.header("🛠️ Deine Kaufdaten & Parameter")
+st.sidebar.header("🛒 Deine Kauf-Details")
 
+# 1. Datumswähler
+purchase_date = st.sidebar.date_input(
+    "Kaufdatum wählen",
+    value=date(2024, 1, 15),
+    min_value=date(2020, 8, 10), # Seit MSTR die BTC-Strategie fährt
+    max_value=date.today()
+)
+
+# 2. Aktienanzahl
 user_shares = st.sidebar.number_input(
-    "Anzahl MSTR Aktien (User_Shares)", 
+    "Anzahl gekaufter MSTR-Aktien", 
     min_value=1, value=100, step=1
 )
 
-user_cost_basis_eur = st.sidebar.number_input(
-    "Kaufpreis pro Aktie in EUR (User_Cost_Basis_EUR)", 
-    min_value=0.01, value=57.92, step=1.0
-)
+# Automatischer Abruf der historischen Kurse
+mstr_price_past_eur, btc_price_past_eur = fetch_historical_prices(purchase_date)
 
-btc_price_past_eur = st.sidebar.number_input(
-    "BTC Kurs bei Kauf in EUR (BTC_Price_Past)", 
-    min_value=1.0, value=38800.0, step=500.0
-)
+# Anzeige der ermittelten historischen Werte in der Sidebar
+st.sidebar.markdown("---")
+st.sidebar.caption("📌 **Automatisch ermittelte historische Kurse:**")
+st.sidebar.text(f"MSTR Kurs am {purchase_date.strftime('%d.%m.%Y')}: €{mstr_price_past_eur:,.2f}")
+st.sidebar.text(f"BTC Kurs am {purchase_date.strftime('%d.%m.%Y')}: €{btc_price_past_eur:,.2f}")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ Markt-Simulation")
 
 simulated_premium = st.sidebar.slider(
-    "Simuliertes NAV-Aufgeld/Rabatt (Simulated_Premium %)",
-    min_value=-20, max_value=50, value=0, step=1,
-    help="Skaliert den aktuellen Freimarkt-Wert um eine Auf-/Abschlags-Prämie."
+    "Simuliertes NAV-Aufgeld/Rabatt (%)",
+    min_value=-20, max_value=50, value=0, step=1
 )
 
-# Premium auf den Marktpreis anwenden
 premium_factor = 1.0 + (simulated_premium / 100.0)
 mstr_price_simulated_eur = mstr_price_curr_eur * premium_factor
 
 # ==========================================
-# 4. MATHEMATICAL ENGINE (Sats-Logic)
+# 4. MATHEMATICAL ENGINE
 # ==========================================
-# Constant: 1 BTC = 100,000,000 Satoshis
 SATS_PER_BTC = 100_000_000
 
-# Step 1: Historical Benchmark (Input Capital)
-total_invest_eur = user_shares * user_cost_basis_eur
+# Automatisches Rechnen der Kaufsumme
+total_invest_eur = user_shares * mstr_price_past_eur
+
+# Step 1: Historical HODL Benchmark
 hodl_benchmark_sats = (total_invest_eur / btc_price_past_eur) * SATS_PER_BTC
 
-# Step 2: Free Market Today (Liquidation Value with Simulated Premium)
+# Step 2: Free Market Today
 market_value_eur = user_shares * mstr_price_simulated_eur
 market_value_sats = (market_value_eur / btc_price_curr_eur) * SATS_PER_BTC
 
-# Step 3: Saylor Engine (Internal BTC Value)
+# Step 3: Saylor Engine (Internal BTC)
 current_btc_per_share = live_data["mstr_btc"] / live_data["mstr_shares"]
 internal_btc_sats = user_shares * current_btc_per_share * SATS_PER_BTC
 
-# Step 4: Dry Powder (Cash-to-Sats)
+# Step 4: Dry Powder (Cash)
 cash_per_share_usd = live_data["mstr_cash_usd"] / live_data["mstr_shares"]
 total_user_cash_usd = user_shares * cash_per_share_usd
-internal_cash_sats = (total_user_cash_usd / btc_price_curr_usd) * SATS_PER_BTC
+internal_cash_sats = (total_user_cash_usd / live_data["btc_usd"]) * SATS_PER_BTC
 
-# Step 5: Total Corporate Substance
+# Step 5: Total Substance
 total_substance_sats = internal_btc_sats + internal_cash_sats
 
-# Percentages / Renditen berechnen
+# Renditen
 fiat_return_pct = ((market_value_eur - total_invest_eur) / total_invest_eur) * 100
 market_sats_yield_pct = ((market_value_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 
 # ==========================================
-# 5. UI: MAIN METRIC CARDS
+# 5. UI DISPLAY
 # ==========================================
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
-        label="EUR Return (Fiat Yield)",
+        label="EUR Wertentwicklung (Fiat)",
         value=f"€{market_value_eur:,.2f}",
         delta=f"{fiat_return_pct:+.2f}% (Invest: €{total_invest_eur:,.2f})"
     )
 
 with col2:
     st.metric(
-        label="Market Sats Yield (Open Market)",
+        label="Market Sats Yield (Freier Markt)",
         value=f"{market_value_sats:,.0f} Sats",
         delta=f"{market_sats_yield_pct:+.2f}% vs. Spot HODL"
     )
 
 with col3:
     st.metric(
-        label="Corporate Substance Yield (Internal)",
+        label="Substance Yield (Firmen-Substanz)",
         value=f"{total_substance_sats:,.0f} Sats",
         delta=f"{substance_yield_pct:+.2f}% vs. Spot HODL"
     )
@@ -159,56 +186,51 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 6. VISUALIZATION: STACKED BAR CHART
+# 6. PLOTLY CHART
 # ==========================================
-st.subheader("📊 Der Satoshi-Multiplier im Vergleich")
+st.subheader("📊 Satoshi Multiplier Vergleich")
 
 fig = go.Figure()
 
-# Bar 1: Spot HODL Benchmark
 fig.add_trace(go.Bar(
     name="Spot HODL Benchmark",
     x=["1. Spot HODL Benchmark"],
     y=[hodl_benchmark_sats],
-    marker_color="#F7931A", # Bitcoin Orange
+    marker_color="#F7931A",
     text=[f"{hodl_benchmark_sats:,.0f} Sats"],
     textposition="auto"
 ))
 
-# Bar 2: Free Market Value
 fig.add_trace(go.Bar(
     name="Free Market Value (Market Sats)",
     x=["2. Free Market Value"],
     y=[market_value_sats],
-    marker_color="#29B6F6", # Light Blue
+    marker_color="#29B6F6",
     text=[f"{market_value_sats:,.0f} Sats"],
     textposition="auto"
 ))
 
-# Bar 3: Stacked Internal Asset Base (Layer 1: BTC)
 fig.add_trace(go.Bar(
     name="Physical BTC Backing",
     x=["3. Internal Asset Base"],
     y=[internal_btc_sats],
-    marker_color="#4CAF50", # Green
+    marker_color="#4CAF50",
     text=[f"{internal_btc_sats:,.0f} Sats"],
     textposition="inside"
 ))
 
-# Bar 3: Stacked Internal Asset Base (Layer 2: Cash)
 fig.add_trace(go.Bar(
     name="Corporate Cash Reserve in Sats",
     x=["3. Internal Asset Base"],
     y=[internal_cash_sats],
-    marker_color="#81C784", # Light Green
+    marker_color="#81C784",
     text=[f"{internal_cash_sats:,.0f} Sats"],
     textposition="inside"
 ))
 
-# Layout Styling
 fig.update_layout(
     barmode="stack",
-    title="Anzahl Satoshis: HODL vs. Marktwert vs. Physische Firmen-Substanz",
+    title=f"Vergleich der Satoshis (Kaufdatum: {purchase_date.strftime('%d.%m.%Y')})",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=550,
@@ -216,13 +238,3 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-
-# ==========================================
-# 7. FOOTER & DATA SUMMARY
-# ==========================================
-with st.expander("ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen"):
-    st.write(f"- **BTC Preis (USD):** ${btc_price_curr_usd:,.2f}")
-    st.write(f"- **MSTR Preis (USD):** ${mstr_price_curr_usd:,.2f}")
-    st.write(f"- **EUR/USD Kurs:** {eur_usd_curr:.4f}")
-    st.write(f"- **MSTR BTC-Bestand:** {live_data['mstr_btc']:,} BTC")
-    st.write(f"- **MSTR Aktien im Umlauf:** {live_data['mstr_shares']:,}")
