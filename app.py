@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 # ==========================================
-# 1. STREAMLIT PAGE CONFIG
+# 1. STREAMLIT PAGE CONFIG & CUSTOM CSS
 # ==========================================
 st.set_page_config(
     page_title="Saylor Engine Dashboard",
@@ -13,15 +13,23 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS für den fixierten (Sticky) Header
+# Custom CSS: Entfernt den riesigen Leerraum oben & fixiert die Überschrift sauber
 st.markdown("""
     <style>
+        /* 1. Standard-Padding von Streamlit oben drastisch reduzieren */
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+        }
+
+        /* 2. Sticky Container ganz oben andocken ohne Lücke */
         div[data-testid="stVerticalBlock"] > div:has(div.sticky-header) {
             position: sticky;
-            top: 2.8rem;
+            top: 0rem;
             background-color: var(--background-color, #ffffff);
             z-index: 999;
-            padding-bottom: 1rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.8rem;
             border-bottom: 1px solid rgba(49, 51, 63, 0.1);
         }
     </style>
@@ -168,7 +176,7 @@ TRANSLATIONS = {
 }
 
 # ==========================================
-# 4. SIDEBAR: CLEAN CURRENCY SELECTOR (DROPDOWN)
+# 4. SIDEBAR: CLEAN CURRENCY SELECTOR
 # ==========================================
 currency = st.sidebar.selectbox(
     "Währung / Currency",
@@ -181,7 +189,7 @@ t = TRANSLATIONS[lang]
 curr_symbol = "$" if currency == "USD" else "€"
 
 # ==========================================
-# 5. FIXIERTER (STICKY) HEADER
+# 5. FIXIERTER (STICKY) HEADER (SAUBER ANGEPASST)
 # ==========================================
 header_container = st.container()
 with header_container:
