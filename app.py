@@ -448,7 +448,7 @@ try:
     
     # Datum konvertieren & als Index setzen
     # Passt sich an 'date' oder 'datum' an
-    d_col = 'date' if 'date' in df_j.columns else 'datum'
+    d_col = 'dates' if 'dates' in df_j.columns else 'datum'
     df_j['parsed_date'] = pd.to_datetime(df_j[d_col]).dt.tz_localize(None)
     df_j = df_j.sort_values('parsed_date').drop_duplicates('parsed_date', keep='last')
     df_j.set_index('parsed_date', inplace=True)
