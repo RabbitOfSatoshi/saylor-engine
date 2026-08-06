@@ -16,10 +16,9 @@ st.set_page_config(
 # ==========================================
 # 2. HISTORISCHE SEC-FILING DATENBANK
 # Quellennachweis: SEC Form 8-K, 10-Q & 10-K filings (MicroStrategy Inc.)
-# Format: (Datum, BTC_Delta, Aktienanzahl_PostSplit, Cash_USD)
+# Format: (Datum, BTC_Delta, Aktienanzahl_PostSplit, Cash_USD, SEC_Quelle)
 # ==========================================
 MSTR_SEC_HISTORICAL_DATA = [
-    # Format: (Datum, BTC_Delta, Shares_Out, Cash_Reserve_USD, SEC_Source)
     ("2020-08-11", 21454, 96000000, 50000000, "SEC Form 8-K (11.08.2020)"),
     ("2020-09-14", 16796, 96000000, 50000000, "SEC Form 8-K (14.09.2020)"),
     ("2020-12-04", 2574, 96000000, 45000000, "SEC Form 8-K (04.12.2020)"),
@@ -80,7 +79,7 @@ df_tx['btc_holdings'] = df_tx['btc_change'].cumsum()
 df_tx.set_index('date', inplace=True)
 
 # ==========================================
-# 3. TRANSLATIONS
+# 3. TRANSLATIONS (INKL. REIHENFOLGE & FOOTER)
 # ==========================================
 TRANSLATIONS = {
     "DE": {
@@ -93,15 +92,15 @@ TRANSLATIONS = {
         "hist_prices": "📌 **Historische Kurse (Split-bereinigt via Yahoo):**",
         "sidebar_sim": "🎛️ Markt-Simulation",
         "sim_premium": "Simuliertes NAV-Aufgeld/Rabatt (%)",
-        "metric_return": "Fiat Wertentwicklung",
-        "metric_market_sats": "Market Sats Yield (Freier Markt)",
-        "metric_substance_sats": "Substance Yield (Firmen-Substanz)",
+        "metric_fiat": "1. Fiat Return (Wertentwicklung)",
+        "metric_hodl": "2. Spot HODL Benchmark",
+        "metric_backing": "3. Corporate Backing (Substanz)",
         "vs_hodl": "vs. Spot HODL",
         "chart_title": "Satoshi Multiplier Momentaufnahme",
         "timeline_title": "📈 Satoshi Multiplier Zeitverlauf (Historisch verifizierte SEC-Filings)",
-        "bar_hodl": "1. Spot HODL Benchmark",
-        "bar_market": "2. Free Market Value",
-        "bar_substance": "3. Internal Asset Base",
+        "bar_fiat": "1. Fiat Return Value",
+        "bar_hodl": "2. Spot HODL Benchmark",
+        "bar_substance": "3. Corporate Backing",
         "layer_btc": "Physische BTC-Deckung",
         "layer_cash": "Firmen-Cash-Reserve in Sats",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
@@ -110,6 +109,14 @@ TRANSLATIONS = {
         "footer_mstr": "MSTR Preis",
         "footer_cash": "MSTR Cash-Reserve",
         "footer_shares": "MSTR Aktien im Umlauf",
+        "footer_sources_md": """
+        **Verifizierte Datenquellen:**
+        * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
+          * Form 8-K (Tagesgenaue BTC-Käufe & Verkäufe)
+          * Form 10-Q & 10-K (Quartalsweise Cash-Reserven & Aktien im Umlauf)
+        * **Marktdaten & Wechselkurse:**
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt (10:1 Split vom 08.08.2024).
+        """
     },
     "EN": {
         "title": "⚡ Saylor Engine ($MSTR)",
@@ -121,15 +128,15 @@ TRANSLATIONS = {
         "hist_prices": "📌 **Historical Prices (Split-adjusted via Yahoo):**",
         "sidebar_sim": "🎛️ Market Simulation",
         "sim_premium": "Simulated NAV Premium/Discount (%)",
-        "metric_return": "Fiat Return",
-        "metric_market_sats": "Market Sats Yield (Open Market)",
-        "metric_substance_sats": "Substance Yield (Internal Base)",
+        "metric_fiat": "1. Fiat Return",
+        "metric_hodl": "2. Spot HODL Benchmark",
+        "metric_backing": "3. Corporate Backing (Substance)",
         "vs_hodl": "vs. Spot HODL",
         "chart_title": "Satoshi Multiplier Snapshot",
         "timeline_title": "📈 Satoshi Multiplier Performance (Verified SEC Filings)",
-        "bar_hodl": "1. Spot HODL Benchmark",
-        "bar_market": "2. Free Market Value",
-        "bar_substance": "3. Internal Asset Base",
+        "bar_fiat": "1. Fiat Return Value",
+        "bar_hodl": "2. Spot HODL Benchmark",
+        "bar_substance": "3. Corporate Backing",
         "layer_btc": "Physical BTC Backing",
         "layer_cash": "Corporate Cash Reserve in Sats",
         "expander_title": "ℹ️ View Current Market & Fundamental Data",
@@ -138,6 +145,14 @@ TRANSLATIONS = {
         "footer_mstr": "MSTR Price",
         "footer_cash": "MSTR Cash Reserve",
         "footer_shares": "MSTR Shares Outstanding",
+        "footer_sources_md": """
+        **Verified Data Sources:**
+        * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
+          * Form 8-K (Daily BTC purchases & sales)
+          * Form 10-Q & 10-K (Quarterly cash reserves & shares outstanding)
+        * **Market Data & FX Rates:**
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted (10:1 split on Aug 8, 2024).
+        """
     }
 }
 
@@ -236,9 +251,10 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.header(t["sidebar_purchase"])
 
+# DEFAULT AUF DEN 28.02.2024 GESETZT
 purchase_date = st.sidebar.date_input(
     t["purchase_date"],
-    value=date(2024, 1, 15),
+    value=date(2024, 2, 28),
     min_value=date(2020, 8, 10),
     max_value=date.today() - timedelta(days=2)
 )
@@ -258,8 +274,8 @@ if not hist_df.empty:
         mstr_price_past = float(hist_df['mstr_usd'].iloc[0])
         btc_price_past = float(hist_df['btc_usd'].iloc[0])
 else:
-    mstr_price_past = 48.21 if currency == "USD" else 44.00
-    btc_price_past = 42511.0 if currency == "USD" else 39000.0
+    mstr_price_past = 68.50 if currency == "USD" else 63.00
+    btc_price_past = 59000.0 if currency == "USD" else 54000.0
 
 st.sidebar.markdown("---")
 st.sidebar.caption(t["hist_prices"])
@@ -310,27 +326,30 @@ market_sats_yield_pct = ((market_value_sats - hodl_benchmark_sats) / hodl_benchm
 substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 
 # ==========================================
-# 8. UI DISPLAY (KPI CARDS)
+# 8. UI DISPLAY (KPI CARDS: 1. FIAT -> 2. SPOT -> 3. BACKING)
 # ==========================================
 col1, col2, col3 = st.columns(3)
 
+# 1. FIAT
 with col1:
     st.metric(
-        label=f"{t['metric_return']} ({currency})",
+        label=f"{t['metric_fiat']} ({currency})",
         value=f"{curr_symbol}{market_value_fiat:,.2f}",
         delta=f"{fiat_return_pct:+.2f}% (Invest: {curr_symbol}{total_invest:,.2f})"
     )
 
+# 2. SPOT HODL BENCHMARK
 with col2:
     st.metric(
-        label=t["metric_market_sats"],
-        value=f"{market_value_sats:,.0f} Sats",
-        delta=f"{market_sats_yield_pct:+.2f}% {t['vs_hodl']}"
+        label=t["metric_hodl"],
+        value=f"{hodl_benchmark_sats:,.0f} Sats",
+        delta="100% Benchmark (Basis)"
     )
 
+# 3. CORPORATE BACKING (SUBSTANZ)
 with col3:
     st.metric(
-        label=t["metric_substance_sats"],
+        label=t["metric_backing"],
         value=f"{total_substance_sats:,.0f} Sats",
         delta=f"{substance_yield_pct:+.2f}% {t['vs_hodl']}"
     )
@@ -338,12 +357,23 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 9. PLOTLY SNAPSHOT CHART (BAR)
+# 9. PLOTLY SNAPSHOT CHART (BAR: 1. FIAT -> 2. SPOT -> 3. BACKING)
 # ==========================================
 st.subheader(f"📊 {t['chart_title']}")
 
 fig_bar = go.Figure()
 
+# 1. FIAT / FREE MARKET VALUE (SATS ÄQUIVALENT)
+fig_bar.add_trace(go.Bar(
+    name=t["bar_fiat"],
+    x=[t["bar_fiat"]],
+    y=[market_value_sats],
+    marker_color="#29B6F6",
+    text=[f"{market_value_sats:,.0f} Sats"],
+    textposition="auto"
+))
+
+# 2. SPOT HODL BENCHMARK
 fig_bar.add_trace(go.Bar(
     name=t["bar_hodl"],
     x=[t["bar_hodl"]],
@@ -353,15 +383,7 @@ fig_bar.add_trace(go.Bar(
     textposition="auto"
 ))
 
-fig_bar.add_trace(go.Bar(
-    name=t["bar_market"],
-    x=[t["bar_market"]],
-    y=[market_value_sats],
-    marker_color="#29B6F6",
-    text=[f"{market_value_sats:,.0f} Sats"],
-    textposition="auto"
-))
-
+# 3. CORPORATE BACKING (Physisches BTC + Cash Stack)
 fig_bar.add_trace(go.Bar(
     name=t["layer_btc"],
     x=[t["bar_substance"]],
@@ -382,7 +404,7 @@ fig_bar.add_trace(go.Bar(
 
 fig_bar.update_layout(
     barmode="stack",
-    title="Satoshis Momentaufnahme",
+    title=t["chart_title"],
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
     height=450,
@@ -436,16 +458,7 @@ merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] + merged_df['
 # ==========================================
 fig_line = go.Figure()
 
-# 1. Spot HODL Benchmark (Orange Gestrichelt)
-fig_line.add_trace(go.Scatter(
-    x=merged_df.index,
-    y=[hodl_benchmark_sats] * len(merged_df),
-    mode='lines',
-    name='Spot HODL Benchmark',
-    line=dict(color='#F7931A', width=2, dash='dash')
-))
-
-# 2. Free Market Value in Sats (Blau schattiert)
+# 1. Free Market Value in Sats (Blau schattiert)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['market_sats'],
@@ -456,12 +469,21 @@ fig_line.add_trace(go.Scatter(
     line=dict(color='#29B6F6', width=2)
 ))
 
+# 2. Spot HODL Benchmark (Orange Gestrichelt)
+fig_line.add_trace(go.Scatter(
+    x=merged_df.index,
+    y=[hodl_benchmark_sats] * len(merged_df),
+    mode='lines',
+    name='Spot HODL Benchmark',
+    line=dict(color='#F7931A', width=2, dash='dash')
+))
+
 # 3. Internal Asset Base (Physisches BTC - Grün Durchgezogen)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['internal_btc_sats'],
     mode='lines',
-    name='Internal BTC Base (SEC SEC-Filings)',
+    name='Internal BTC Base (SEC Filings)',
     line=dict(color='#4CAF50', width=2.5)
 ))
 
@@ -475,7 +497,7 @@ fig_line.add_trace(go.Scatter(
 ))
 
 fig_line.update_layout(
-    title="Entwicklung aller Multiplier-Schichten (in Sats) über die Zeit",
+    title=t["timeline_title"],
     xaxis_title="Datum",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
@@ -486,7 +508,7 @@ fig_line.update_layout(
 st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# 12. FOOTER & QUELLEN-NACHWEIS (EXPLICIT & TRANSPARENT)
+# 12. FOOTER & QUELLEN-NACHWEIS (ZWEISPRACHIG)
 # ==========================================
 st.markdown("---")
 
@@ -502,11 +524,4 @@ with col_f1:
 
 with col_f2:
     with st.expander(t["sources_title"]):
-        st.markdown("""
-        **Verifizierte Datenquellen:**
-        * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
-          * Form 8-K (Tagesgenaue BTC-Käufe & Verkäufe)
-          * Form 10-Q & 10-K (Quartalsweise Cash-Reserven & Aktien im Umlauf)
-        * **Marktdaten & Wechselkurse:**
-          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt (10:1 Split vom 08.08.2024).
-        """)
+        st.markdown(t["footer_sources_md"])
