@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import yfinance as yf
 from datetime import date, timedelta
+import pandas as pd
 
 # ==========================================
 # 1. STREAMLIT PAGE CONFIG
@@ -30,7 +31,8 @@ TRANSLATIONS = {
         "metric_market_sats": "Market Sats Yield (Freier Markt)",
         "metric_substance_sats": "Substance Yield (Firmen-Substanz)",
         "vs_hodl": "vs. Spot HODL",
-        "chart_title": "Satoshi Multiplier Vergleich",
+        "chart_title": "Satoshi Multiplier Momentaufnahme",
+        "timeline_title": "📈 Satoshi Multiplier Zeitverlauf",
         "bar_hodl": "1. Spot HODL Benchmark",
         "bar_market": "2. Free Market Value",
         "bar_substance": "3. Internal Asset Base",
@@ -56,7 +58,8 @@ TRANSLATIONS = {
         "metric_market_sats": "Market Sats Yield (Open Market)",
         "metric_substance_sats": "Substance Yield (Internal Base)",
         "vs_hodl": "vs. Spot HODL",
-        "chart_title": "Satoshi Multiplier Comparison",
+        "chart_title": "Satoshi Multiplier Snapshot",
+        "timeline_title": "📈 Satoshi Multiplier Historical Performance",
         "bar_hodl": "1. Spot HODL Benchmark",
         "bar_market": "2. Free Market Value",
         "bar_substance": "3. Internal Asset Base",
@@ -80,7 +83,6 @@ currency = st.sidebar.radio(
     index=0
 )
 
-# Automatische Sprachzuordnung basierend auf Währung
 lang = "DE" if currency == "EUR" else "EN"
 t = TRANSLATIONS[lang]
 curr_symbol = "€" if currency == "EUR" else "$"
@@ -117,33 +119,28 @@ def fetch_live_data():
         return defaults
 
 @st.cache_data(ttl=86400)
-def fetch_historical_prices(target_date, selected_currency):
-    start_str = target_date.strftime('%Y-%m-%d')
-    end_date = target_date + timedelta(days=5)
-    end_str = end_date.strftime('%Y-%m-%d')
+def fetch_historical_series(start_date):
+    """Holt die tägliche Preis-Historie ab dem Kaufdatum für MSTR und BTC."""
+    start_str = start_date.strftime('%Y-%m-%d')
+    
+    mstr_df = yf.Ticker("MSTR").history(start=start_str)['Close']
+    btc_df = yf.Ticker("BTC-USD").history(start=start_str)['Close']
+    eur_df = yf.Ticker("EURUSD=X").history(start=start_str)['Close']
 
-    try:
-        mstr_hist = yf.Ticker("MSTR").history(start=start_str, end=end_str)
-        mstr_price_usd = float(mstr_hist['Close'].iloc[0])
-        
-        btc_hist = yf.Ticker("BTC-USD").history(start=start_str, end=end_str)
-        btc_price_usd = float(btc_hist['Close'].iloc[0])
+    df = pd.DataFrame({
+        "mstr_usd": mstr_df,
+        "btc_usd": btc_df,
+        "eur_usd": eur_df
+    }).dropna()
 
-        eur_usd_hist = yf.Ticker("EURUSD=X").history(start=start_str, end=end_str)
-        eur_rate = float(eur_usd_hist['Close'].iloc[0]) if not eur_usd_hist.empty else 1.08
+    df['mstr_eur'] = df['mstr_usd'] / df['eur_usd']
+    df['btc_eur'] = df['btc_usd'] / df['eur_usd']
 
-        if selected_currency == "EUR":
-            return mstr_price_usd / eur_rate, btc_price_usd / eur_rate
-        else:
-            return mstr_price_usd, btc_price_usd
-    except Exception:
-        if selected_currency == "EUR":
-            return 57.92, 38800.0
-        return 63.00, 42000.0
+    return df
 
 live_data = fetch_live_data()
 
-# Aktuelle Preise in gewählter Währung
+# Aktuelle Preise
 if currency == "EUR":
     btc_price_curr = live_data["btc_usd"] / live_data["eur_usd"]
     mstr_price_curr = live_data["mstr_usd"] / live_data["eur_usd"]
@@ -161,7 +158,7 @@ purchase_date = st.sidebar.date_input(
     t["purchase_date"],
     value=date(2024, 1, 15),
     min_value=date(2020, 8, 10),
-    max_value=date.today()
+    max_value=date.today() - timedelta(days=2)
 )
 
 user_shares = st.sidebar.number_input(
@@ -169,7 +166,16 @@ user_shares = st.sidebar.number_input(
     min_value=1, value=100, step=1
 )
 
-mstr_price_past, btc_price_past = fetch_historical_prices(purchase_date, currency)
+# Laden der Zeitreihe
+hist_df = fetch_historical_series(purchase_date)
+
+# Kaufkurse ermitteln
+if currency == "EUR":
+    mstr_price_past = hist_df['mstr_eur'].iloc[0]
+    btc_price_past = hist_df['btc_eur'].iloc[0]
+else:
+    mstr_price_past = hist_df['mstr_usd'].iloc[0]
+    btc_price_past = hist_df['btc_usd'].iloc[0]
 
 st.sidebar.markdown("---")
 st.sidebar.caption(t["hist_prices"])
@@ -248,13 +254,13 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 8. PLOTLY CHART
+# 8. PLOTLY SNAPSHOT CHART (BAR)
 # ==========================================
 st.subheader(f"📊 {t['chart_title']}")
 
-fig = go.Figure()
+fig_bar = go.Figure()
 
-fig.add_trace(go.Bar(
+fig_bar.add_trace(go.Bar(
     name=t["bar_hodl"],
     x=[t["bar_hodl"]],
     y=[hodl_benchmark_sats],
@@ -263,7 +269,7 @@ fig.add_trace(go.Bar(
     textposition="auto"
 ))
 
-fig.add_trace(go.Bar(
+fig_bar.add_trace(go.Bar(
     name=t["bar_market"],
     x=[t["bar_market"]],
     y=[market_value_sats],
@@ -272,7 +278,7 @@ fig.add_trace(go.Bar(
     textposition="auto"
 ))
 
-fig.add_trace(go.Bar(
+fig_bar.add_trace(go.Bar(
     name=t["layer_btc"],
     x=[t["bar_substance"]],
     y=[internal_btc_sats],
@@ -281,7 +287,7 @@ fig.add_trace(go.Bar(
     textposition="inside"
 ))
 
-fig.add_trace(go.Bar(
+fig_bar.add_trace(go.Bar(
     name=t["layer_cash"],
     x=[t["bar_substance"]],
     y=[internal_cash_sats],
@@ -290,19 +296,64 @@ fig.add_trace(go.Bar(
     textposition="inside"
 ))
 
-fig.update_layout(
+fig_bar.update_layout(
     barmode="stack",
-    title=f"Satoshis ({purchase_date.strftime(date_format)})",
+    title=f"Satoshis Momentaufnahme",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=550,
+    height=450,
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 9. FOOTER & DATA SUMMARY
+# 9. PLOTLY HISTORICAL TIMELINE CHART (LINE)
+# ==========================================
+st.markdown("---")
+st.subheader(t["timeline_title"])
+
+# Tagesgenaue Satoshis-Berechnung für den Freimarkt
+mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
+btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
+
+hist_df['market_sats'] = ( (user_shares * hist_df[mstr_col]) / hist_df[btc_col] ) * SATS_PER_BTC
+
+fig_line = go.Figure()
+
+# Line 1: HODL Benchmark (konstant)
+fig_line.add_trace(go.Scatter(
+    x=hist_df.index,
+    y=[hodl_benchmark_sats] * len(hist_df),
+    mode='lines',
+    name='Spot HODL Benchmark',
+    line=dict(color='#F7931A', width=2, dash='dash')
+))
+
+# Line 2: Market Value in Sats über Zeit
+fig_line.add_trace(go.Scatter(
+    x=hist_df.index,
+    y=hist_df['market_sats'],
+    mode='lines',
+    name='Market Sats (Freier Markt)',
+    fill='tozeroy',
+    fillcolor='rgba(41, 182, 246, 0.1)',
+    line=dict(color='#29B6F6', width=2.5)
+))
+
+fig_line.update_layout(
+    title="Entwicklung des Freimarktwerts (in Sats) vs. Spot HODL Benchmark",
+    xaxis_title="Datum",
+    yaxis_title="Satoshis (Sats)",
+    template="plotly_white",
+    height=500,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+
+st.plotly_chart(fig_line, use_container_width=True)
+
+# ==========================================
+# 10. FOOTER & DATA SUMMARY
 # ==========================================
 with st.expander(t["expander_title"]):
     st.write(f"- **{t['footer_btc']}:** {curr_symbol}{btc_price_curr:,.2f}")
