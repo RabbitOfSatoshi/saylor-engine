@@ -27,7 +27,6 @@ st.markdown("""
             position: -webkit-sticky;
             position: sticky;
             top: 0;
-            background-color: var(--background-color, #ffffff);
             z-index: 9999;
             padding: 0.8rem 0 0.8rem 0;
             border-bottom: 1px solid rgba(49, 51, 63, 0.1);
