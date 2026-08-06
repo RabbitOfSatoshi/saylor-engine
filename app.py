@@ -184,7 +184,6 @@ def fetch_live_data():
 def fetch_historical_series(start_date):
     start_str = start_date.strftime('%Y-%m-%d')
     try:
-        # auto_adjust=True stellt sicher, dass historische Kurse an heutige Aktienanzahl angepasst sind!
         mstr_df = yf.Ticker("MSTR").history(start=start_str, auto_adjust=True)['Close']
         btc_df = yf.Ticker("BTC-USD").history(start=start_str, auto_adjust=True)['Close']
         eur_df = yf.Ticker("EURUSD=X").history(start=start_str, auto_adjust=True)['Close']
@@ -238,23 +237,11 @@ purchase_date = st.sidebar.date_input(
     max_value=date.today() - timedelta(days=2)
 )
 
-# Nutzer gibt heutige (Post-Split) Aktien ein
-user_shares_input = st.sidebar.number_input(
+# Direkte Eingabe: Yahoo liefert historische Daten sowieso bereits split-bereinigt!
+user_shares = st.sidebar.number_input(
     t["shares_count"], 
     min_value=1, value=1, step=1
 )
-
-# 10:1 Split Datum: 8. August 2024
-SPLIT_DATE = date(2024, 8, 8)
-
-# Falls Kauf VOR dem Split war und der Nutzer die DAMALIGE Aktienanzahl meint, 
-# rechnet die Engine intern mit der heutigen Anzahl (x10).
-# Da Yahoo Finance Kurse post-split anzeigt, müssen auch die Shares post-split sein.
-if purchase_date < SPLIT_DATE:
-    # 1 historische Aktie entspricht 10 heutigen Einheiten
-    effective_user_shares = user_shares_input * 10
-else:
-    effective_user_shares = user_shares_input
 
 hist_df = fetch_historical_series(purchase_date)
 
@@ -292,30 +279,30 @@ mstr_price_simulated = mstr_price_curr * premium_factor
 # ==========================================
 SATS_PER_BTC = 100_000_000
 
-# Wichtig: Investition basiert auf den Post-Split Shares * Post-Split Kaufpreis 
-# (oder Pre-Split Shares * Pre-Split Kaufpreis, was mathematisch identisch ist!)
-total_invest = effective_user_shares * mstr_price_past
+# Investition = Post-Split Aktien * Post-Split Kaufpreis
+total_invest = user_shares * mstr_price_past
 
 # Step 1: HODL Benchmark
 hodl_benchmark_sats = (total_invest / btc_price_past) * SATS_PER_BTC
 
 # Step 2: Free Market Today
-market_value_fiat = effective_user_shares * mstr_price_simulated
+market_value_fiat = user_shares * mstr_price_simulated
 market_value_sats = (market_value_fiat / btc_price_curr) * SATS_PER_BTC
 
 # Step 3: Saylor Engine (Internal BTC)
 current_btc_per_share = live_data["mstr_btc"] / live_data["mstr_shares"]
-internal_btc_sats = effective_user_shares * current_btc_per_share * SATS_PER_BTC
+internal_btc_sats = user_shares * current_btc_per_share * SATS_PER_BTC
 
 # Step 4: Dry Powder (Cash-to-Sats)
 cash_per_share_usd = live_data["mstr_cash_usd"] / live_data["mstr_shares"]
-total_user_cash_usd = effective_user_shares * cash_per_share_usd
+total_user_cash_usd = user_shares * cash_per_share_usd
 internal_cash_sats = (total_user_cash_usd / live_data["btc_usd"]) * SATS_PER_BTC
 
 # Step 5: Total Substance
 total_substance_sats = internal_btc_sats + internal_cash_sats
 
 # Renditen
+fiat_return_fiat = market_value_fiat - total_invest
 fiat_return_pct = ((market_value_fiat - total_invest) / total_invest) * 100
 market_sats_yield_pct = ((market_value_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
@@ -431,10 +418,10 @@ mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
 # 1. Freimarktwert in Sats
-merged_df['market_sats'] = ((effective_user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
+merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
 
 # 2. Physische BTC-Deckung pro Aktie in Sats
-merged_df['internal_btc_sats'] = (effective_user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
+merged_df['internal_btc_sats'] = (user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
 
 # 3. Total Substance (+ Cash Reserve)
 merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] * 1.05
