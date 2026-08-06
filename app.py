@@ -51,7 +51,6 @@ st.markdown("""
 
 # ==========================================
 # 2. HISTORISCHE SEC-CASH-DATENBANK (8-K / 10-Q / 10-K)
-# Format: (Datum, Cash_USD)
 # ==========================================
 SEC_CASH_HISTORICAL = [
     ("2020-08-11", 50000000),
@@ -424,53 +423,80 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. COMBINED DATA ENGINE (JSON FOR BTC + HARDCODED SEC FOR CASH)
+# 11. COMBINED DATA ENGINE (FLEXIBLER ROBUSTER JSON PARSER)
 # ==========================================
 st.markdown("---")
 
-# JSON Laden für die tagesgenauen BTC / Share Daten
-@st.cache_data
-def load_json_data():
+def load_json_daily_series(target_index):
     try:
         with open("mstr_purchases.json", "r") as f:
             data = json.load(f)
         
-        df_json = pd.DataFrame(data)
-        if 'date' in df_json.columns:
-            df_json['date'] = pd.to_datetime(df_json['date'])
-            df_json.set_index('date', inplace=True)
-        return df_json
-    except Exception:
-        return None
+        df_j = pd.DataFrame(data)
+        
+        # Datums-Spalte flexibel erkennen
+        date_col = next((c for c in df_j.columns if 'date' in c.lower() or 'datum' in c.lower()), None)
+        if date_col:
+            df_j['parsed_date'] = pd.to_datetime(df_j[date_col]).dt.tz_localize(None)
+            df_j.set_index('parsed_date', inplace=True)
+            df_j.sort_index(inplace=True)
+        else:
+            return None, None
 
-df_json_btc = load_json_data()
+        # BTC / Share Spalte flexibel erkennen
+        sats_col = next((c for c in df_j.columns if 'sat' in c.lower() or 'btc_per_share' in c.lower()), None)
+        btc_holdings_col = next((c for c in df_j.columns if 'btc_holdings' in c.lower() or 'total_btc' in c.lower()), None)
+        shares_col = next((c for c in df_j.columns if 'share' in c.lower() and 'sat' not in c.lower()), None)
+
+        # 1. BTC per Share Sats bestimmen
+        if sats_col:
+            series_sats = df_j[sats_col]
+        elif btc_holdings_col and shares_col:
+            series_sats = (df_j[btc_holdings_col] / df_j[shares_col]) * SATS_PER_BTC
+        else:
+            return None, None
+
+        # 2. Shares Outstanding bestimmen
+        if shares_col:
+            series_shares = df_j[shares_col]
+        else:
+            series_shares = None
+
+        # Auf Haupt-Zeitachse reindexieren & vorwärts füllen
+        sats_daily = series_sats.reindex(target_index).ffill().bfill()
+        shares_daily = series_shares.reindex(target_index).ffill().bfill() if series_shares is not None else None
+
+        return sats_daily, shares_daily
+
+    except Exception:
+        return None, None
 
 hist_df_clean = hist_df.copy()
-hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
+hist_df_clean.index = pd.to_datetime(hist_df_clean.index).dt.tz_localize(None)
 
 merged_df = hist_df_clean.copy()
 
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-# 1. Börsenpreis in Sats pro Aktie
+# Börsenpreis in Sats pro Aktie
 merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * SATS_PER_BTC
 
-# 2. BTC / Share aus JSON mergen (feingliedrige Käufe)
-if df_json_btc is not None and 'btc_per_share_sats' in df_json_btc.columns:
-    btc_json_daily = df_json_btc['btc_per_share_sats'].reindex(merged_df.index).ffill().bfill()
-    merged_df['btc_per_share_sats'] = btc_json_daily
-    
-    if 'shares_out' in df_json_btc.columns:
-        merged_df['shares_out'] = df_json_btc['shares_out'].reindex(merged_df.index).ffill().bfill()
-    else:
-        merged_df['shares_out'] = live_data["mstr_shares"]
+# Versuche JSON zu laden
+json_sats_daily, json_shares_daily = load_json_daily_series(merged_df.index)
+
+if json_sats_daily is not None:
+    merged_df['btc_per_share_sats'] = json_sats_daily
 else:
-    # Fallback falls kein JSON vorhanden
+    # Falls JSON fehlschlägt, melde es nicht stumm als Gerade
     merged_df['btc_per_share_sats'] = (live_data["mstr_btc"] / live_data["mstr_shares"]) * SATS_PER_BTC
+
+if json_shares_daily is not None:
+    merged_df['shares_out'] = json_shares_daily
+else:
     merged_df['shares_out'] = live_data["mstr_shares"]
 
-# 3. Cash aus hartcodiertem SEC-Array mappen & ffill anwenden
+# SEC-Cash tagesgenau mappen
 cash_daily = df_cash['cash_usd'].reindex(merged_df.index).ffill().bfill()
 merged_df['cash_usd'] = cash_daily
 
@@ -478,17 +504,17 @@ merged_df['cash_usd'] = cash_daily
 merged_df['cash_per_share_usd'] = merged_df['cash_usd'] / merged_df['shares_out']
 merged_df['cash_per_share_sats'] = (merged_df['cash_per_share_usd'] / merged_df['btc_usd']) * SATS_PER_BTC
 
-# 4. Gesamtsubstanz: JSON BTC/Share + Hartcodiertes SEC-Cash/Share
+# Gesamtsubstanz = JSON-BTC-Entwicklung + Hartcodiertes SEC-Cash
 merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + merged_df['cash_per_share_sats']
 
 hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART (PRO AKTIE)
+# 12. PLOTLY HISTORICAL TIMELINE CHART
 # ==========================================
 fig_line = go.Figure()
 
-# 1. Free Market Value (Börsenkurs in Sats)
+# 1. Free Market Value
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['mstr_price_in_sats'],
@@ -501,7 +527,7 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value / Share:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
 ))
 
-# 2. Spot HODL Benchmark
+# 2. HODL Benchmark
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=[hodl_per_share_sats] * len(merged_df),
@@ -511,7 +537,7 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Spot Benchmark / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 3. BTC / Share aus JSON (Fein aufgelöst)
+# 3. BTC / Share aus JSON (Feine Dynamik!)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['btc_per_share_sats'],
@@ -521,7 +547,7 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share (JSON):</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 4. Satoshi Equivalent / Share (JSON BTC + SEC Cash)
+# 4. Total Substance (JSON BTC + Hartcodiertes SEC Cash)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['total_substance_per_share_sats'],
