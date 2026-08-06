@@ -50,7 +50,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. HISTORISCHE SEC-DATENBANK (EXAKT AUS JSON ENTPACKT)
+# 2. HISTORISCHE SEC-DATENBANK
 # ==========================================
 JSON_FILENAME = "mstr_treasury_history.json"
 
@@ -58,7 +58,6 @@ try:
     with open(JSON_FILENAME, "r", encoding="utf-8") as f:
         json_data = json.load(f)
 
-    # Greife tief in den 'MSTR' -> 'historicalData' Knoten
     if isinstance(json_data, dict):
         if "MSTR" in json_data and "historicalData" in json_data["MSTR"]:
             hist_node = json_data["MSTR"]["historicalData"]
@@ -71,7 +70,6 @@ try:
 
     df_tx = pd.DataFrame(hist_node)
 
-    # Keys aus deinem JSON auf die interne Logik mappen
     column_mapping = {
         'dates': 'date',
         'btc_balance': 'btc_holdings',
@@ -80,11 +78,9 @@ try:
     }
     df_tx.rename(columns=column_mapping, inplace=True)
 
-    # Datum verarbeiten & als Index setzen
     df_tx['date'] = pd.to_datetime(df_tx['date'])
     df_tx.set_index('date', inplace=True)
 
-    # Absicherung & Clean-Up (Vorwärtsfüllen von Lücken)
     if 'shares_out' not in df_tx.columns or df_tx['shares_out'].dropna().empty:
         df_tx['shares_out'] = 353_900_000
     else:
@@ -98,7 +94,7 @@ try:
     df_tx['btc_holdings'] = df_tx['btc_holdings'].ffill().bfill()
 
 except FileNotFoundError:
-    st.error(f"Datei '{JSON_FILENAME}' wurde nicht gefunden! Bitte stelle sicher, dass sie im Hauptverzeichnis liegt.")
+    st.error(f"Datei '{JSON_FILENAME}' wurde nicht gefunden!")
     st.stop()
 except Exception as e:
     st.error(f"Fehler beim Verarbeiten der JSON-Datei: {e}")
@@ -121,14 +117,15 @@ TRANSLATIONS = {
         "metric_hodl": "2. Spot HODL Benchmark",
         "metric_backing": "3. Corporate Backing (Substanz)",
         "vs_hodl": "vs. Spot HODL",
-        "chart_title": "📊 Satoshi Multiplier Snapshot",
-        "timeline_title": "📈 Satoshi Multiplier Performance (Verified SEC Filings)",
+        "chart_title": "📊 Satoshi Multiplier Snapshot (Gesamt-Portfolio)",
+        "timeline_title": "📈 Satoshi / Share & Substanz-Entwicklung (Pro Aktie)",
         "bar_fiat": "1. Free Market Value",
         "bar_hodl": "2. Spot HODL Benchmark",
         "bar_substance": "3. Internal Asset Base",
         "layer_btc": "Physical BTC Backing",
         "layer_cash": "Corporate Cash Reserve in Sats",
-        "line_btc": "Internal Physical BTC Backing (Sats)",
+        "line_btc": "BTC / Share (Sats)",
+        "line_total": "Satoshi Equivalent / Share (incl. Cash)",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
         "sources_title": "📚 Primäre Datenquellen & SEC Filings",
         "footer_btc": "BTC Preis",
@@ -140,7 +137,7 @@ TRANSLATIONS = {
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Dynamisch geladen aus `mstr_treasury_history.json` (Form 8-K, 10-Q & 10-K)
         * **Marktdaten & Wechselkurse:**
-          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt (10:1 Split vom 08.08.2024).
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-bereinigt.
         """
     },
     "EN": {
@@ -156,14 +153,15 @@ TRANSLATIONS = {
         "metric_hodl": "2. Spot HODL Benchmark",
         "metric_backing": "3. Corporate Backing (Substance)",
         "vs_hodl": "vs. Spot HODL",
-        "chart_title": "📊 Satoshi Multiplier Snapshot",
-        "timeline_title": "📈 Satoshi Multiplier Performance (Verified SEC Filings)",
+        "chart_title": "📊 Satoshi Multiplier Snapshot (Total Portfolio)",
+        "timeline_title": "📈 Satoshi / Share & Substance History (Per Share)",
         "bar_fiat": "1. Free Market Value",
         "bar_hodl": "2. Spot HODL Benchmark",
         "bar_substance": "3. Internal Asset Base",
         "layer_btc": "Physical BTC Backing",
         "layer_cash": "Corporate Cash Reserve in Sats",
-        "line_btc": "Internal Physical BTC Backing (Sats)",
+        "line_btc": "BTC / Share (Sats)",
+        "line_total": "Satoshi Equivalent / Share (incl. Cash)",
         "expander_title": "View Current Market & Fundamental Data",
         "sources_title": "📚 Primary Data Sources & SEC Filings",
         "footer_btc": "BTC Price",
@@ -175,13 +173,13 @@ TRANSLATIONS = {
         * **SEC Filings (MicroStrategy Inc. - CIK 0001050446):**
           * Dynamically loaded from `mstr_treasury_history.json` (Form 8-K, 10-Q & 10-K)
         * **Market Data & FX Rates:**
-          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted (10:1 split on Aug 8, 2024).
+          * Yahoo Finance API (`MSTR`, `BTC-USD`, `EURUSD=X`) – Split-adjusted.
         """
     }
 }
 
 # ==========================================
-# 4. SIDEBAR: WÄHRUNGSAUSWAHL (DROPDOWN)
+# 4. SIDEBAR: WÄHRUNGSAUSWAHL
 # ==========================================
 currency = st.sidebar.selectbox(
     "Währung / Currency",
@@ -247,13 +245,11 @@ def fetch_historical_series(start_date):
         })
 
         df = df.ffill().bfill().dropna()
-
         if df.empty:
             raise ValueError("Keine Daten vorhanden.")
 
         df['mstr_eur'] = df['mstr_usd'] / df['eur_usd']
         df['btc_eur'] = df['btc_usd'] / df['eur_usd']
-
         return df
 
     except Exception:
@@ -445,7 +441,7 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 11. HISTORICAL TIMELINE ENGINE
+# 11. HISTORICAL TIMELINE ENGINE (EXAKT PRO AKTIE CALCULATED)
 # ==========================================
 st.markdown("---")
 
@@ -472,57 +468,69 @@ merged_df['cash_usd'] = treasury_daily['cash_usd']
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
+# 1. Börsenpreis der Aktie in Satoshis (pro Aktie)
+merged_df['mstr_price_in_sats'] = (merged_df[mstr_col] / merged_df[btc_col]) * SATS_PER_BTC
+
+# 2. Reine BTC pro Aktie (in Satoshis)
 merged_df['btc_per_share_sats'] = (merged_df['btc_holdings'] / merged_df['shares_out']) * SATS_PER_BTC
-merged_df['internal_btc_sats'] = user_shares * merged_df['btc_per_share_sats']
+
+# 3. Cash pro Aktie umgerechnet in USD -> Satoshis an Tag X
 merged_df['cash_per_share_usd'] = merged_df['cash_usd'] / merged_df['shares_out']
-merged_df['internal_cash_sats'] = (user_shares * (merged_df['cash_per_share_usd'] / merged_df['btc_usd'])) * SATS_PER_BTC
-merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] + merged_df['internal_cash_sats']
-merged_df['treasury_per_share_fiat'] = (merged_df['btc_per_share_sats'] / SATS_PER_BTC) * merged_df[btc_col]
+merged_df['cash_per_share_sats'] = (merged_df['cash_per_share_usd'] / merged_df['btc_usd']) * SATS_PER_BTC
+
+# 4. Gesamtes Satoshi-Äquivalent pro Aktie (BTC + Cash)
+merged_df['total_substance_per_share_sats'] = merged_df['btc_per_share_sats'] + merged_df['cash_per_share_sats']
+
+# HODL Benchmark PRO AKTIE (relativ zum Kaufdatum)
+hodl_per_share_sats = (mstr_price_past / btc_price_past) * SATS_PER_BTC
 
 # ==========================================
-# 12. PLOTLY HISTORICAL TIMELINE CHART
+# 12. PLOTLY HISTORICAL TIMELINE CHART (PRO AKTIE)
 # ==========================================
 fig_line = go.Figure()
 
+# 1. Börsenwert der Aktie in Sats
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
-    y=merged_df['market_sats'],
+    y=merged_df['mstr_price_in_sats'],
     mode='lines',
-    name='Free Market Value (Sats)',
+    name='Free Market Value (Sats / Share)',
     fill='tozeroy',
     fillcolor='rgba(41, 182, 246, 0.08)',
     line=dict(color='#29B6F6', width=2),
     customdata=merged_df[mstr_col],
-    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Market Value / Share:</b> %{y:,.0f} Sats<br><b>Aktienkurs:</b> " + curr_symbol + "%{customdata:,.2f}<extra></extra>"
 ))
 
+# 2. Spot HODL Benchmark
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
-    y=[hodl_benchmark_sats] * len(merged_df),
+    y=[hodl_per_share_sats] * len(merged_df),
     mode='lines',
-    name='Spot HODL Benchmark',
+    name='Spot HODL Benchmark / Share',
     line=dict(color='#F7931A', width=2, dash='dash'),
-    hovertemplate="<b>Spot Benchmark:</b> %{y:,.0f} Sats<extra></extra>"
+    hovertemplate="<b>Spot Benchmark / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
+# 3. BTC / Share (Sats)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
-    y=merged_df['internal_btc_sats'],
+    y=merged_df['btc_per_share_sats'],
     mode='lines',
     name=t["line_btc"],
     line=dict(color='#4CAF50', width=2.5),
-    customdata=merged_df[['btc_per_share_sats', 'treasury_per_share_fiat']].values,
-    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>User BTC Backing:</b> %{y:,.0f} Sats<br><b>(Pro Aktie:</b> %{customdata[0]:,.0f} Sats / " + curr_symbol + "%{customdata[1]:,.2f})<extra></extra>"
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
+# 4. Satoshi Equivalent / Share (incl. Cash)
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
-    y=merged_df['total_substance_sats'],
+    y=merged_df['total_substance_per_share_sats'],
     mode='lines',
-    name='Total Asset Base (+ SEC Cash Reserve)',
+    name=t["line_total"],
     line=dict(color='#81C784', width=1.5, dash='dot'),
-    hovertemplate="<b>Total Substance:</b> %{y:,.0f} Sats<extra></extra>"
+    customdata=merged_df[['cash_per_share_usd', 'cash_per_share_sats']].values,
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Total Substance / Share:</b> %{y:,.0f} Sats<br><i>(davon Cash: $%{customdata[0]:,.2f} = %{customdata[1]:,.0f} Sats)</i><extra></extra>"
 ))
 
 fig_line.update_layout(
@@ -531,7 +539,7 @@ fig_line.update_layout(
         font=dict(size=20, color="#31333F", family="Source Sans Pro, sans-serif")
     ),
     xaxis_title="Datum",
-    yaxis_title="Satoshis (Sats)",
+    yaxis_title="Satoshis pro Aktie (Sats / Share)",
     template="plotly_white",
     height=600,
     margin=dict(t=50, b=80, l=10, r=10),
