@@ -437,6 +437,7 @@ def load_json_daily_series(target_index):
         # Datums-Spalte flexibel erkennen
         date_col = next((c for c in df_j.columns if 'date' in c.lower() or 'datum' in c.lower()), None)
         if date_col:
+            # Hier nutzen wir pd.to_datetime auf einer Series, da klappt .dt.tz_localize
             df_j['parsed_date'] = pd.to_datetime(df_j[date_col]).dt.tz_localize(None)
             df_j.set_index('parsed_date', inplace=True)
             df_j.sort_index(inplace=True)
@@ -471,8 +472,14 @@ def load_json_daily_series(target_index):
     except Exception:
         return None, None
 
+# --- DIESE ZEILEN WURDEN KORRIGIERT ---
 hist_df_clean = hist_df.copy()
-hist_df_clean.index = pd.to_datetime(hist_df_clean.index).dt.tz_localize(None)
+# DatetimeIndex hat tz_localize direkt (ohne .dt)!
+idx_dt = pd.to_datetime(hist_df_clean.index)
+if idx_dt.tz is not None:
+    hist_df_clean.index = idx_dt.tz_localize(None)
+else:
+    hist_df_clean.index = idx_dt
 
 merged_df = hist_df_clean.copy()
 
@@ -488,7 +495,6 @@ json_sats_daily, json_shares_daily = load_json_daily_series(merged_df.index)
 if json_sats_daily is not None:
     merged_df['btc_per_share_sats'] = json_sats_daily
 else:
-    # Falls JSON fehlschlägt, melde es nicht stumm als Gerade
     merged_df['btc_per_share_sats'] = (live_data["mstr_btc"] / live_data["mstr_shares"]) * SATS_PER_BTC
 
 if json_shares_daily is not None:
@@ -537,7 +543,7 @@ fig_line.add_trace(go.Scatter(
     hovertemplate="<b>Spot Benchmark / Share:</b> %{y:,.0f} Sats<extra></extra>"
 ))
 
-# 3. BTC / Share aus JSON (Feine Dynamik!)
+# 3. BTC / Share aus JSON
 fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['btc_per_share_sats'],
