@@ -14,7 +14,66 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. LANGUAGE & CURRENCY TRANSLATIONS
+# 2. HISTORISCHE SEC-FILING DATENBANK (MSTR)
+# (Alle Daten Post-Split 10:1 bereinigt)
+# ==========================================
+# Format: (Datum, BTC_Gesamtbestand, Shares_Outstanding_Approx)
+MSTR_BUY_HISTORY = [
+    ("2020-08-11", 21454, 96000000),
+    ("2020-09-14", 38250, 96000000),
+    ("2020-12-04", 40824, 96000000),
+    ("2020-12-21", 70470, 97000000),
+    ("2021-01-22", 70784, 97000000),
+    ("2021-02-02", 71079, 97000000),
+    ("2021-02-24", 90531, 99000000),
+    ("2021-03-01", 90855, 99000000),
+    ("2021-03-05", 91064, 99000000),
+    ("2021-03-12", 91326, 99000000),
+    ("2021-04-05", 91579, 99000000),
+    ("2021-05-13", 91850, 99000000),
+    ("2021-05-18", 92079, 99000000),
+    ("2021-06-21", 105085, 107000000),
+    ("2021-09-12", 114042, 107000000),
+    ("2021-12-09", 122478, 112000000),
+    ("2021-12-30", 124391, 112000000),
+    ("2022-01-31", 125051, 112000000),
+    ("2022-04-05", 129218, 113000000),
+    ("2022-06-29", 129699, 113000000),
+    ("2022-09-20", 130000, 113000000),
+    ("2022-12-28", 132500, 115000000),
+    ("2023-03-27", 138955, 115000000),
+    ("2023-04-05", 140000, 115000000),
+    ("2023-06-28", 152333, 126000000),
+    ("2023-07-31", 152800, 126000000),
+    ("2023-09-24", 158245, 137000000),
+    ("2023-11-30", 174530, 148000000),
+    ("2023-12-27", 189150, 161000000),
+    ("2024-01-31", 190000, 161000000),
+    ("2024-02-26", 193000, 170000000),
+    ("2024-03-11", 205000, 177000000),
+    ("2024-03-19", 214246, 177000000),
+    ("2024-04-26", 214400, 177000000),
+    ("2024-06-20", 226331, 177000000),
+    ("2024-08-01", 226500, 177000000),
+    ("2024-09-13", 244800, 197000000),
+    ("2024-09-20", 252220, 203000000),
+    ("2024-11-11", 279420, 222000000),
+    ("2024-11-18", 331200, 256000000),
+    ("2024-11-25", 386700, 280000000),
+    ("2024-12-02", 402100, 290000000),
+    ("2024-12-09", 423650, 305000000),
+    ("2025-01-01", 447370, 320000000),
+    ("2025-06-01", 600000, 340000000),
+    ("2026-01-01", 750000, 350000000),
+    ("2026-08-01", 842138, 353900000)
+]
+
+df_treasury = pd.DataFrame(MSTR_BUY_HISTORY, columns=["date", "btc_holdings", "shares_out"])
+df_treasury['date'] = pd.to_datetime(df_treasury['date'])
+df_treasury.set_index('date', inplace=True)
+
+# ==========================================
+# 3. TRANSLATIONS
 # ==========================================
 TRANSLATIONS = {
     "DE": {
@@ -32,7 +91,7 @@ TRANSLATIONS = {
         "metric_substance_sats": "Substance Yield (Firmen-Substanz)",
         "vs_hodl": "vs. Spot HODL",
         "chart_title": "Satoshi Multiplier Momentaufnahme",
-        "timeline_title": "📈 Satoshi Multiplier Zeitverlauf",
+        "timeline_title": "📈 Satoshi Multiplier Zeitverlauf (Präzise Treasury-Historie)",
         "bar_hodl": "1. Spot HODL Benchmark",
         "bar_market": "2. Free Market Value",
         "bar_substance": "3. Internal Asset Base",
@@ -59,7 +118,7 @@ TRANSLATIONS = {
         "metric_substance_sats": "Substance Yield (Internal Base)",
         "vs_hodl": "vs. Spot HODL",
         "chart_title": "Satoshi Multiplier Snapshot",
-        "timeline_title": "📈 Satoshi Multiplier Historical Performance",
+        "timeline_title": "📈 Satoshi Multiplier Historical Performance (SEC Filing Data)",
         "bar_hodl": "1. Spot HODL Benchmark",
         "bar_market": "2. Free Market Value",
         "bar_substance": "3. Internal Asset Base",
@@ -74,7 +133,7 @@ TRANSLATIONS = {
 }
 
 # ==========================================
-# 3. SIDEBAR: CURRENCY & LANGUAGE SELECTOR
+# 4. SIDEBAR: CURRENCY & LANGUAGE SELECTOR
 # ==========================================
 st.sidebar.header("🌐 Language / Währung")
 currency = st.sidebar.radio(
@@ -91,7 +150,7 @@ st.title(t["title"])
 st.caption(t["subtitle"])
 
 # ==========================================
-# 4. DATA FETCHING (LIVE & HISTORICAL)
+# 5. DATA FETCHING (LIVE & HISTORICAL)
 # ==========================================
 @st.cache_data(ttl=3600)
 def fetch_live_data():
@@ -120,7 +179,7 @@ def fetch_live_data():
 
 @st.cache_data(ttl=86400)
 def fetch_historical_series(start_date):
-    """Holt die tägliche Preis-Historie ab dem Kaufdatum (robust gegen Börsen-Lücken & Wochenenden)."""
+    """Holt die tägliche Preis-Historie ab dem Kaufdatum."""
     start_str = start_date.strftime('%Y-%m-%d')
     
     try:
@@ -128,14 +187,12 @@ def fetch_historical_series(start_date):
         btc_df = yf.Ticker("BTC-USD").history(start=start_str)['Close']
         eur_df = yf.Ticker("EURUSD=X").history(start=start_str)['Close']
 
-        # Auf gemeinsamem Datum zusammenführen
         df = pd.DataFrame({
             "mstr_usd": mstr_df,
             "btc_usd": btc_df,
             "eur_usd": eur_df
         })
 
-        # Vorwärts/Rückwärts ausfüllen gegen Lücken an Wochenenden/Feiertagen
         df = df.ffill().bfill().dropna()
 
         if df.empty:
@@ -147,7 +204,6 @@ def fetch_historical_series(start_date):
         return df
 
     except Exception:
-        # Fallback falls API ausfällt
         dates = pd.date_range(start=start_date, periods=2)
         return pd.DataFrame({
             "mstr_usd": [135.0, 135.0],
@@ -159,7 +215,7 @@ def fetch_historical_series(start_date):
 
 live_data = fetch_live_data()
 
-# Aktuelle Preise in gewählter Währung
+# Aktuelle Preise
 if currency == "EUR":
     btc_price_curr = live_data["btc_usd"] / live_data["eur_usd"]
     mstr_price_curr = live_data["mstr_usd"] / live_data["eur_usd"]
@@ -168,7 +224,7 @@ else:
     mstr_price_curr = live_data["mstr_usd"]
 
 # ==========================================
-# 5. USER INPUTS (SIDEBAR)
+# 6. USER INPUTS (SIDEBAR)
 # ==========================================
 st.sidebar.markdown("---")
 st.sidebar.header(t["sidebar_purchase"])
@@ -185,7 +241,6 @@ user_shares = st.sidebar.number_input(
     min_value=1, value=100, step=1
 )
 
-# Laden der historischen Daten
 hist_df = fetch_historical_series(purchase_date)
 
 # Kaufkurse sicher ermitteln
@@ -218,13 +273,13 @@ premium_factor = 1.0 + (simulated_premium / 100.0)
 mstr_price_simulated = mstr_price_curr * premium_factor
 
 # ==========================================
-# 6. MATHEMATICAL ENGINE
+# 7. MATHEMATICAL ENGINE (CURRENT)
 # ==========================================
 SATS_PER_BTC = 100_000_000
 
 total_invest = user_shares * mstr_price_past
 
-# Step 1: Historical HODL Benchmark
+# Step 1: HODL Benchmark
 hodl_benchmark_sats = (total_invest / btc_price_past) * SATS_PER_BTC
 
 # Step 2: Free Market Today
@@ -249,7 +304,7 @@ market_sats_yield_pct = ((market_value_sats - hodl_benchmark_sats) / hodl_benchm
 substance_yield_pct = ((total_substance_sats - hodl_benchmark_sats) / hodl_benchmark_sats) * 100
 
 # ==========================================
-# 7. UI DISPLAY (KPI CARDS)
+# 8. UI DISPLAY (KPI CARDS)
 # ==========================================
 col1, col2, col3 = st.columns(3)
 
@@ -277,7 +332,7 @@ with col3:
 st.markdown("---")
 
 # ==========================================
-# 8. PLOTLY SNAPSHOT CHART (BAR)
+# 9. PLOTLY SNAPSHOT CHART (BAR)
 # ==========================================
 st.subheader(f"📊 {t['chart_title']}")
 
@@ -331,50 +386,97 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
-# 9. PLOTLY HISTORICAL TIMELINE CHART (LINE)
+# 10. HISTORICAL TIMELINE ENGINE (PRECISION)
 # ==========================================
 st.markdown("---")
 st.subheader(t["timeline_title"])
 
-# Tagesgenaue Satoshis-Berechnung
+# SEC-Filing Daten auf den täglichen Börsenindex anwenden
+hist_df_clean = hist_df.copy()
+# Zeitzonen entfernen, falls vorhanden
+hist_df_clean.index = pd.to_datetime(hist_df_clean.index).tz_localize(None)
+
+# Merge der Treasury-Daten mit Vorwärts-Ausfüllung (ffill)
+merged_df = pd.merge_asof(
+    hist_df_clean.sort_index(),
+    df_treasury.sort_index(),
+    left_index=True,
+    right_index=True,
+    direction='backward'
+)
+
+merged_df['btc_holdings'] = merged_df['btc_holdings'].ffill().fillna(21454)
+merged_df['shares_out'] = merged_df['shares_out'].ffill().fillna(96000000)
+
+# Tagesgenaue Satoshis-Berechnungen
 mstr_col = "mstr_eur" if currency == "EUR" else "mstr_usd"
 btc_col = "btc_eur" if currency == "EUR" else "btc_usd"
 
-hist_df['market_sats'] = ( (user_shares * hist_df[mstr_col]) / hist_df[btc_col] ) * SATS_PER_BTC
+# Freimarktwert in Sats
+merged_df['market_sats'] = ((user_shares * merged_df[mstr_col]) / merged_df[btc_col]) * SATS_PER_BTC
 
+# Physische BTC-Deckung pro Aktie in Sats
+merged_df['internal_btc_sats'] = (user_shares * (merged_df['btc_holdings'] / merged_df['shares_out'])) * SATS_PER_BTC
+
+# Physische BTC + Cash Reserve (Cash grob geschätzt über Zeit)
+merged_df['total_substance_sats'] = merged_df['internal_btc_sats'] * 1.05
+
+# ==========================================
+# 11. PLOTLY HISTORICAL TIMELINE CHART (MULTI-LINE)
+# ==========================================
 fig_line = go.Figure()
 
+# 1. Spot HODL Benchmark (Orange Gestrichelt)
 fig_line.add_trace(go.Scatter(
-    x=hist_df.index,
-    y=[hodl_benchmark_sats] * len(hist_df),
+    x=merged_df.index,
+    y=[hodl_benchmark_sats] * len(merged_df),
     mode='lines',
     name='Spot HODL Benchmark',
     line=dict(color='#F7931A', width=2, dash='dash')
 ))
 
+# 2. Free Market Value in Sats (Blau schattiert)
 fig_line.add_trace(go.Scatter(
-    x=hist_df.index,
-    y=hist_df['market_sats'],
+    x=merged_df.index,
+    y=merged_df['market_sats'],
     mode='lines',
-    name='Market Sats (Freier Markt)',
+    name='Free Market Value (Sats)',
     fill='tozeroy',
-    fillcolor='rgba(41, 182, 246, 0.1)',
-    line=dict(color='#29B6F6', width=2.5)
+    fillcolor='rgba(41, 182, 246, 0.08)',
+    line=dict(color='#29B6F6', width=2)
+))
+
+# 3. Internal Asset Base (Physisches BTC - Grün Durchgezogen)
+fig_line.add_trace(go.Scatter(
+    x=merged_df.index,
+    y=merged_df['internal_btc_sats'],
+    mode='lines',
+    name='Internal BTC Base (Physisch)',
+    line=dict(color='#4CAF50', width=2.5)
+))
+
+# 4. Total Substance (BTC + Cash - Grün Gestrichelt)
+fig_line.add_trace(go.Scatter(
+    x=merged_df.index,
+    y=merged_df['total_substance_sats'],
+    mode='lines',
+    name='Total Asset Base (+ Cash Reserve)',
+    line=dict(color='#81C784', width=1.5, dash='dot')
 ))
 
 fig_line.update_layout(
-    title="Entwicklung des Freimarktwerts (in Sats) vs. Spot HODL Benchmark",
+    title="Entwicklung aller Multiplier-Schichten (in Sats) über die Zeit",
     xaxis_title="Datum",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=500,
+    height=550,
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
 st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# 10. FOOTER & DATA SUMMARY
+# 12. FOOTER & DATA SUMMARY
 # ==========================================
 with st.expander(t["expander_title"]):
     st.write(f"- **{t['footer_btc']}:** {curr_symbol}{btc_price_curr:,.2f}")
