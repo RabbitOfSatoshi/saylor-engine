@@ -128,6 +128,7 @@ TRANSLATIONS = {
         "bar_substance": "3. Internal Asset Base",
         "layer_btc": "Physical BTC Backing",
         "layer_cash": "Corporate Cash Reserve in Sats",
+        "line_btc": "Internal Physical BTC Backing (Sats)",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
         "sources_title": "📚 Primäre Datenquellen & SEC Filings",
         "footer_btc": "BTC Preis",
@@ -162,6 +163,7 @@ TRANSLATIONS = {
         "bar_substance": "3. Internal Asset Base",
         "layer_btc": "Physical BTC Backing",
         "layer_cash": "Corporate Cash Reserve in Sats",
+        "line_btc": "Internal Physical BTC Backing (Sats)",
         "expander_title": "View Current Market & Fundamental Data",
         "sources_title": "📚 Primary Data Sources & SEC Filings",
         "footer_btc": "BTC Price",
@@ -429,15 +431,14 @@ fig_bar.update_layout(
     ),
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=480,
-    margin=dict(t=50, b=30, l=10, r=10),
+    height=500,
+    margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
-        orientation="v",
+        orientation="h",
         yanchor="top",
-        y=0.98,
-        xanchor="right",
-        x=0.99,
-        bgcolor="rgba(255, 255, 255, 0.8)"
+        y=-0.2,
+        xanchor="center",
+        x=0.5
     )
 )
 
@@ -509,10 +510,10 @@ fig_line.add_trace(go.Scatter(
     x=merged_df.index,
     y=merged_df['internal_btc_sats'],
     mode='lines',
-    name='BTC / Share in Satoshi',
+    name=t["line_btc"],
     line=dict(color='#4CAF50', width=2.5),
     customdata=merged_df[['btc_per_share_sats', 'treasury_per_share_fiat']].values,
-    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>BTC / Share:</b> %{customdata[0]:,.0f} Sats<br><b>Treasury Value / Share:</b> " + curr_symbol + "%{customdata[1]:,.2f}<extra></extra>"
+    hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>User BTC Backing:</b> %{y:,.0f} Sats<br><b>(Pro Aktie:</b> %{customdata[0]:,.0f} Sats / " + curr_symbol + "%{customdata[1]:,.2f})<extra></extra>"
 ))
 
 fig_line.add_trace(go.Scatter(
@@ -532,15 +533,14 @@ fig_line.update_layout(
     xaxis_title="Datum",
     yaxis_title="Satoshis (Sats)",
     template="plotly_white",
-    height=580,
-    margin=dict(t=50, b=30, l=10, r=10),
+    height=600,
+    margin=dict(t=50, b=80, l=10, r=10),
     legend=dict(
-        orientation="v",
+        orientation="h",
         yanchor="top",
-        y=0.98,
-        xanchor="right",
-        x=0.99,
-        bgcolor="rgba(255, 255, 255, 0.8)"
+        y=-0.25,
+        xanchor="center",
+        x=0.5
     )
 )
 
