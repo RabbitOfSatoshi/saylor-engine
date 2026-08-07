@@ -121,6 +121,10 @@ TRANSLATIONS = {
         "volume_title": "📊 MSTR Handelsvolumen & Ausstehende Aktien (yfinance)",
         "vol_axis": "Handelsvolumen (Stück)",
         "shares_axis": "Ausstehende Aktien (Shares Outstanding)",
+        "volume_shares_issued_title" : "📊 MSTR Handelsvolumen vs. Neu emittierte Aktien (täglich)",
+        "daily_volume" : "Handelsvolumen (Aktien/Tag)",
+        "new_shares_issued" : "Neu emittierte Aktien (Tag)",
+        "y_axis_shares_per_day" : "Aktien pro Tag",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
         "sources_title": "📚 Primäre Datenquellen & SEC Filings",
         "footer_btc": "BTC Preis",
@@ -163,6 +167,10 @@ TRANSLATIONS = {
         "volume_title": "📊 MSTR Trading Volume & Shares Outstanding (yfinance)",
         "vol_axis": "Trading Volume (Shares)",
         "shares_axis": "Shares Outstanding",
+        "volume_shares_issued_title" : "📊 MSTR Trading Volume vs. Newly Issued Shares (Daily)",
+        "daily_volume" : "Trading Volume (Shares/Day)",
+        "new_shares_issued" : "Newly Issued Shares (Day)",
+        "y_axis_shares_per_day" : "Shares per Day",
         "expander_title": "View Current Market & Fundamental Data",
         "sources_title": "📚 Primary Data Sources & SEC Filings",
         "footer_btc": "BTC Price",
@@ -699,6 +707,95 @@ if not mstr_turnover.empty:
     )
 
     st.plotly_chart(fig_turnover, use_container_width=True)
+
+# ==========================================
+# 13. MSTR TRADING VOLUME vs. NEWLY ISSUED SHARES (SINGLE AXIS - SHARES/DAY)
+# ==========================================
+st.markdown("---")
+
+@st.cache_data(ttl=3600)
+def load_mstr_volume_only(start_date):
+    ticker = yf.Ticker("MSTR")
+    start_str = start_date.strftime("%Y-%m-%d")
+    try:
+        # Handelsvolumen (bereits split-bereinigt von yfinance)
+        hist = ticker.history(start=start_str, auto_adjust=True)
+        return hist[["Volume"]]
+    except Exception:
+        return pd.DataFrame()
+
+# Handelsvolumen laden
+mstr_vol_df = load_mstr_volume_only(purchase_date)
+
+if not mstr_vol_df.empty:
+    df_vol_issued = merged_df[["shares_out"]].copy()
+    
+    # Timezone-Alignment
+    mstr_vol_df.index = pd.to_datetime(mstr_vol_df.index).tz_localize(None)
+    
+    df_vol_issued["Volume"] = mstr_vol_df["Volume"]
+    
+    # Täglich neu emittierte Aktien = Differenz des kumulierten Bestand (split-bereinigt)
+    df_vol_issued["new_shares"] = df_vol_issued["shares_out"].diff().clip(lower=0)
+    df_vol_issued = df_vol_issued.dropna(subset=["Volume"])
+
+    fig_vol_issued = go.Figure()
+
+    # 1. Handelsvolumen als Barchart
+    fig_vol_issued.add_trace(
+        go.Bar(
+            x=df_vol_issued.index,
+            y=df_vol_issued["Volume"],
+            name=t["daily_volume"],
+            marker_color="rgba(41, 182, 246, 0.4)",
+            hovertemplate="<b>%{x|%d.%m.%Y}</b><br>" + t["daily_volume"] + ": %{y:,.0f}<extra></extra>"
+        )
+    )
+
+    # 2. Neu emittierte Aktien am jeweiligen Tag als prägnante Balken / Linien auf DERSELBEN Achse
+    fig_vol_issued.add_trace(
+        go.Bar(
+            x=df_vol_issued.index,
+            y=df_vol_issued["new_shares"],
+            name=t["new_shares_issued"],
+            marker_color="#F7931A",
+            hovertemplate="<b>%{x|%d.%m.%Y}</b><br>" + t["new_shares_issued"] + ": %{y:,.0f}<extra></extra>"
+        )
+    )
+
+    min_x = merged_df.index.min()
+    max_x = merged_df.index.max()
+
+    fig_vol_issued.update_layout(
+        title=dict(
+            text=t["volume_shares_issued_title"],
+            font=dict(size=20)
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="rgba(128,128,128,0.9)"),
+        height=500,
+        barmode="overlay",  # Überlappende Darstellung für direkten Größenvergleich
+        margin=dict(t=50, b=80, l=10, r=10),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.25,
+            xanchor="center",
+            x=0.5
+        ),
+        xaxis=dict(
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            range=[min_x, max_x]
+        ),
+        yaxis=dict(
+            title=t["y_axis_shares_per_day"],
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            zerolinecolor="rgba(128, 128, 128, 0.3)"
+        )
+    )
+
+    st.plotly_chart(fig_vol_issued, use_container_width=True)
 
 # ==========================================
 # 14. FOOTER & QUELLEN-NACHWEIS
