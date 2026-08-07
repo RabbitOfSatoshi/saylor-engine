@@ -591,74 +591,87 @@ fig_line.update_layout(
 st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# 13. MSTR TRADING VOLUME & SHARES ISSUED (SYNCHRONIZED & SPLIT-ADJUSTED)
+# 13. MSTR TRADING VOLUME vs. SHARES OUTSTANDING (SINGLE AXIS RATIO)
 # ==========================================
 st.markdown("---")
 
 @st.cache_data(ttl=3600)
-def load_mstr_volume_and_shares(start_date):
+def load_mstr_turnover_data(start_date):
     ticker = yf.Ticker("MSTR")
     start_str = start_date.strftime("%Y-%m-%d")
     try:
-        # Lade historische Marktdaten ab Kaufdatum (Volume ist von yfinance bereits split-bereinigt)
+        # Lade historische Marktdaten ab Kaufdatum
         hist = ticker.history(start=start_str, auto_adjust=True)
-        # Shares Outstanding Historie ab Kaufdatum
+        # Shares Outstanding Historie
         shares = ticker.get_shares_full(start=start_str)
         
         if shares is not None and not shares.empty:
-            # Split-Bereinigung: MSTR 10:1 Split erfolgte am 7./8. August 2024
+            # Split-Bereinigung (10:1 Split am 7./8. August 2024)
             split_cutoff = pd.Timestamp("2024-08-08")
             adjusted_values = []
             for idx, val in shares.items():
                 idx_naive = pd.Timestamp(idx).tz_localize(None)
-                # Falls Datum vor Split liegt und der Wert noch im Pre-Split Bereich (< 100 Mio.) ist
                 if idx_naive < split_cutoff and val < 100_000_000:
                     adjusted_values.append(val * 10)
                 else:
                     adjusted_values.append(val)
             shares = pd.Series(adjusted_values, index=shares.index)
             
+            # Reindex & Forward-Fill auf die Handelstage von hist
+            shares_df = shares.to_frame(name="shares")
+            shares_df.index = pd.to_datetime(shares_df.index).tz_localize(None)
+            hist_index_naive = hist.index.tz_localize(None)
+            
+            # Zusammenführen für die Verhältnisberechnung
+            df_ratio = pd.DataFrame({"Volume": hist["Volume"].values}, index=hist_index_naive)
+            df_ratio = df_ratio.join(shares_df, how="left").ffill().bfill()
+            
+            # VERHÄLTNIS BERECHNEN: Handelsvolumen in % aller ausstehenden Aktien
+            df_ratio["turnover_pct"] = (df_ratio["Volume"] / df_ratio["shares"]) * 100
+            # 7-Tage Gleitender Durchschnitt für saubereren Trend
+            df_ratio["turnover_ma7"] = df_ratio["turnover_pct"].rolling(7).mean()
+            
+            return df_ratio
     except Exception:
-        hist, shares = pd.DataFrame(), None
-    return hist, shares
+        pass
+    return pd.DataFrame()
 
-# Lade Daten synchron zum 'purchase_date' aus der Sidebar
-mstr_hist, mstr_shares = load_mstr_volume_and_shares(purchase_date)
+# Lade Daten synchron zum 'purchase_date'
+mstr_turnover = load_mstr_turnover_data(purchase_date)
 
-if not mstr_hist.empty:
-    fig_vol = make_subplots(specs=[[{"secondary_y": True}]])
+if not mstr_turnover.empty:
+    fig_turnover = go.Figure()
 
-    # 1. Handelsvolumen als Balkendiagramm (Primäre Y-Achse)
-    fig_vol.add_trace(
+    # 1. Tägliche Turnover-Rate als dezente Balken
+    fig_turnover.add_trace(
         go.Bar(
-            x=mstr_hist.index,
-            y=mstr_hist["Volume"],
-            name=t["vol_axis"],
-            marker_color="rgba(41, 182, 246, 0.4)",
-        ),
-        secondary_y=False,
+            x=mstr_turnover.index,
+            y=mstr_turnover["turnover_pct"],
+            name="Tägliche Umschlagsquote (%)",
+            marker_color="rgba(41, 182, 246, 0.3)",
+            hovertemplate="<b>Datum:</b> %{x|%d.%m.%Y}<br><b>Gehandelt:</b> %{y:.2f}% aller Aktien<extra></extra>"
+        )
     )
 
-    # 2. Shares Outstanding als Linie (Sekundäre Y-Achse, split-bereinigt)
-    if mstr_shares is not None and not mstr_shares.empty:
-        fig_vol.add_trace(
-            go.Scatter(
-                x=mstr_shares.index,
-                y=mstr_shares.values,
-                name=t["shares_axis"],
-                mode="lines",
-                line=dict(color="#F7931A", width=3),
-            ),
-            secondary_y=True,
+    # 2. 7-Tage-Durchschnitt als geglättete Trendlinie
+    fig_turnover.add_trace(
+        go.Scatter(
+            x=mstr_turnover.index,
+            y=mstr_turnover["turnover_ma7"],
+            name="7-Tage-Durchschnitt (%)",
+            mode="lines",
+            line=dict(color="#F7931A", width=2.5),
+            hovertemplate="<b>7D Trend:</b> %{y:.2f}%<extra></extra>"
         )
+    )
 
-    # Synchrone Achsenbegrenzung (gleicher Zeitraum wie beim oberen Haupt-Chart)
+    # Synchrone Achsenbegrenzung wie oben
     min_x = merged_df.index.min()
     max_x = merged_df.index.max()
 
-    fig_vol.update_layout(
+    fig_turnover.update_layout(
         title=dict(
-            text=t["volume_title"],
+            text="📊 MSTR Handelsvolumen im Verhältnis zu Shares Outstanding (Turnover Rate)",
             font=dict(size=20)
         ),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -675,22 +688,17 @@ if not mstr_hist.empty:
         ),
         xaxis=dict(
             gridcolor="rgba(128, 128, 128, 0.2)",
-            range=[min_x, max_x]  # Exakte Ausrichtung an das obere Diagramm
+            range=[min_x, max_x]
         ),
+        yaxis=dict(
+            title="Gehandelte Aktien (% des Total Supply)",
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            zerolinecolor="rgba(128, 128, 128, 0.3)",
+            ticksuffix="%"
+        )
     )
 
-    fig_vol.update_yaxes(
-        title_text=t["vol_axis"], 
-        gridcolor="rgba(128, 128, 128, 0.2)", 
-        secondary_y=False
-    )
-    fig_vol.update_yaxes(
-        title_text=t["shares_axis"], 
-        showgrid=False, 
-        secondary_y=True
-    )
-
-    st.plotly_chart(fig_vol, use_container_width=True)
+    st.plotly_chart(fig_turnover, use_container_width=True)
 
 # ==========================================
 # 14. FOOTER & QUELLEN-NACHWEIS
