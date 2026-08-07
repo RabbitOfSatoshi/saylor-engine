@@ -591,21 +591,25 @@ fig_line.update_layout(
 st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# 13. MSTR TRADING VOLUME & SHARES ISSUED (YFINANCE)
+# 13. MSTR TRADING VOLUME & SHARES ISSUED (SYNCHRONIZED TIMELINE)
 # ==========================================
 st.markdown("---")
 
 @st.cache_data(ttl=3600)
-def load_mstr_volume_and_shares():
+def load_mstr_volume_and_shares(start_date):
     ticker = yf.Ticker("MSTR")
+    start_str = start_date.strftime("%Y-%m-%d")
     try:
-        hist = ticker.history(period="2y")
-        shares = ticker.get_shares_full(start=hist.index[0].strftime("%Y-%m-%d"))
+        # Lade historische Marktdaten ab Kaufdatum
+        hist = ticker.history(start=start_str, auto_adjust=True)
+        # Shares Outstanding Historie ab Kaufdatum
+        shares = ticker.get_shares_full(start=start_str)
     except Exception:
         hist, shares = pd.DataFrame(), None
     return hist, shares
 
-mstr_hist, mstr_shares = load_mstr_volume_and_shares()
+# Lade Daten synchron zum 'purchase_date' aus der Sidebar
+mstr_hist, mstr_shares = load_mstr_volume_and_shares(purchase_date)
 
 if not mstr_hist.empty:
     fig_vol = make_subplots(specs=[[{"secondary_y": True}]])
@@ -634,6 +638,10 @@ if not mstr_hist.empty:
             secondary_y=True,
         )
 
+    # Synchrone Achsenbegrenzung festlegen
+    min_x = merged_df.index.min()
+    max_x = merged_df.index.max()
+
     fig_vol.update_layout(
         title=dict(
             text=t["volume_title"],
@@ -651,7 +659,10 @@ if not mstr_hist.empty:
             xanchor="center",
             x=0.5
         ),
-        xaxis=dict(gridcolor="rgba(128, 128, 128, 0.2)"),
+        xaxis=dict(
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            range=[min_x, max_x]  # <--- Erzwingt dieselbe Zeitachse wie oben!
+        ),
     )
 
     fig_vol.update_yaxes(
