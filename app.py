@@ -591,7 +591,7 @@ fig_line.update_layout(
 st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# 13. MSTR TRADING VOLUME & SHARES ISSUED (SYNCHRONIZED TIMELINE)
+# 13. MSTR TRADING VOLUME & SHARES ISSUED (SYNCHRONIZED & SPLIT-ADJUSTED)
 # ==========================================
 st.markdown("---")
 
@@ -600,10 +600,24 @@ def load_mstr_volume_and_shares(start_date):
     ticker = yf.Ticker("MSTR")
     start_str = start_date.strftime("%Y-%m-%d")
     try:
-        # Lade historische Marktdaten ab Kaufdatum
+        # Lade historische Marktdaten ab Kaufdatum (Volume ist von yfinance bereits split-bereinigt)
         hist = ticker.history(start=start_str, auto_adjust=True)
         # Shares Outstanding Historie ab Kaufdatum
         shares = ticker.get_shares_full(start=start_str)
+        
+        if shares is not None and not shares.empty:
+            # Split-Bereinigung: MSTR 10:1 Split erfolgte am 7./8. August 2024
+            split_cutoff = pd.Timestamp("2024-08-08")
+            adjusted_values = []
+            for idx, val in shares.items():
+                idx_naive = pd.Timestamp(idx).tz_localize(None)
+                # Falls Datum vor Split liegt und der Wert noch im Pre-Split Bereich (< 100 Mio.) ist
+                if idx_naive < split_cutoff and val < 100_000_000:
+                    adjusted_values.append(val * 10)
+                else:
+                    adjusted_values.append(val)
+            shares = pd.Series(adjusted_values, index=shares.index)
+            
     except Exception:
         hist, shares = pd.DataFrame(), None
     return hist, shares
@@ -625,7 +639,7 @@ if not mstr_hist.empty:
         secondary_y=False,
     )
 
-    # 2. Shares Outstanding als Linie (Sekundäre Y-Achse)
+    # 2. Shares Outstanding als Linie (Sekundäre Y-Achse, split-bereinigt)
     if mstr_shares is not None and not mstr_shares.empty:
         fig_vol.add_trace(
             go.Scatter(
@@ -638,7 +652,7 @@ if not mstr_hist.empty:
             secondary_y=True,
         )
 
-    # Synchrone Achsenbegrenzung festlegen
+    # Synchrone Achsenbegrenzung (gleicher Zeitraum wie beim oberen Haupt-Chart)
     min_x = merged_df.index.min()
     max_x = merged_df.index.max()
 
@@ -661,7 +675,7 @@ if not mstr_hist.empty:
         ),
         xaxis=dict(
             gridcolor="rgba(128, 128, 128, 0.2)",
-            range=[min_x, max_x]  # <--- Erzwingt dieselbe Zeitachse wie oben!
+            range=[min_x, max_x]  # Exakte Ausrichtung an das obere Diagramm
         ),
     )
 
