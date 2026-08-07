@@ -125,6 +125,9 @@ TRANSLATIONS = {
         "daily_volume" : "Handelsvolumen (Aktien/Tag)",
         "new_shares_issued" : "Neu emittierte Aktien (Tag)",
         "y_axis_shares_per_day" : "Aktien pro Tag",
+        "strc_volume_title" : "📊 STRC Handelsvolumen (Täglich)",
+        "strc_volume_axis" : "STRC Volumen (Stück)",
+        "strc_close_price" : "STRC Schlusskurs ($)",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
         "sources_title": "📚 Primäre Datenquellen & SEC Filings",
         "footer_btc": "BTC Preis",
@@ -171,6 +174,9 @@ TRANSLATIONS = {
         "daily_volume" : "Trading Volume (Shares/Day)",
         "new_shares_issued" : "Newly Issued Shares (Day)",
         "y_axis_shares_per_day" : "Shares per Day",
+        "strc_volume_title" : "📊 STRC Trading Volume (Daily)",
+        "strc_volume_axis" : "STRC Volume (Shares)",
+        "strc_close_price" : "STRC Closing Price ($)",
         "expander_title": "View Current Market & Fundamental Data",
         "sources_title": "📚 Primary Data Sources & SEC Filings",
         "footer_btc": "BTC Price",
@@ -688,7 +694,102 @@ if not mstr_vol_df.empty:
     st.plotly_chart(fig_vol_issued, use_container_width=True)
 
 # ==========================================
-# 14. FOOTER & QUELLEN-NACHWEIS
+# 14. STRC TRADING VOLUME & CLOSING PRICE (OPTION A)
+# ==========================================
+st.markdown("---")
+
+@st.cache_data(ttl=3600)
+def load_strc_market_data(start_date):
+    start_str = start_date.strftime("%Y-%m-%d")
+    try:
+        # Ticker für STRC auf Yahoo Finance
+        strc_ticker = yf.Ticker("STRC")
+        hist = strc_ticker.history(start=start_str, auto_adjust=True)
+        if not hist.empty:
+            return hist[["Volume", "Close"]]
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+# Lade STRC Handelsdaten ab purchase_date
+strc_data = load_strc_market_data(purchase_date)
+
+if not strc_data.empty and strc_data["Volume"].sum() > 0:
+    # Timezone-Alignment
+    strc_data.index = pd.to_datetime(strc_data.index).tz_localize(None)
+
+    fig_strc = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # 1. STRC Handelsvolumen (Balken - Primäre Y-Achse)
+    fig_strc.add_trace(
+        go.Bar(
+            x=strc_data.index,
+            y=strc_data["Volume"],
+            name=t["strc_volume_axis"],
+            marker_color="rgba(156, 39, 176, 0.4)",  # Lila/Violett zur besseren Unterscheidung
+            hovertemplate="<b>%{x|%d.%m.%Y}</b><br>" + t["strc_volume_axis"] + ": %{y:,.0f}<extra></extra>"
+        ),
+        secondary_y=False,
+    )
+
+    # 2. STRC Schlusskurs (Linie - Sekundäre Y-Achse für Kontext)
+    fig_strc.add_trace(
+        go.Scatter(
+            x=strc_data.index,
+            y=strc_data["Close"],
+            name=t["strc_close_price"],
+            mode="lines",
+            line=dict(color="#AB47BC", width=2),
+            hovertemplate="<b>%{x|%d.%m.%Y}</b><br>" + t["strc_close_price"] + ": $%{y:.2f}<extra></extra>"
+        ),
+        secondary_y=True,
+    )
+
+    # Synchrone Achsenbegrenzung wie in den anderen Charts
+    min_x = merged_df.index.min()
+    max_x = merged_df.index.max()
+
+    fig_strc.update_layout(
+        title=dict(
+            text=t["strc_volume_title"],
+            font=dict(size=20)
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="rgba(128,128,128,0.9)"),
+        height=500,
+        margin=dict(t=50, b=80, l=10, r=10),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.25,
+            xanchor="center",
+            x=0.5
+        ),
+        xaxis=dict(
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            range=[min_x, max_x]
+        ),
+    )
+
+    fig_strc.update_yaxes(
+        title_text=t["strc_volume_axis"],
+        gridcolor="rgba(128, 128, 128, 0.2)",
+        secondary_y=False
+    )
+    fig_strc.update_yaxes(
+        title_text=t["strc_close_price"],
+        showgrid=False,
+        ticksuffix="$",
+        secondary_y=True
+    )
+
+    st.plotly_chart(fig_strc, use_container_width=True)
+else:
+    st.info("Keine Handelsdaten für STRC auf Yahoo Finance im gewählten Zeitraum verfügbar.")
+
+# ==========================================
+# 15. FOOTER & QUELLEN-NACHWEIS
 # ==========================================
 st.markdown("---")
 
