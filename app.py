@@ -128,6 +128,7 @@ TRANSLATIONS = {
         "strc_volume_title" : "📊 STRC Handelsvolumen (Täglich)",
         "strc_volume_axis" : "STRC Volumen (Stück)",
         "strc_close_price" : "STRC Schlusskurs ($)",
+        "hodl_delta" : "0.00% Benchmark (Basis)",
         "expander_title": "ℹ️ Aktuelle Markt- und Fundamentaldaten anzeigen",
         "sources_title": "📚 Primäre Datenquellen & SEC Filings",
         "footer_btc": "BTC Preis",
@@ -177,6 +178,7 @@ TRANSLATIONS = {
         "strc_volume_title" : "📊 STRC Trading Volume (Daily)",
         "strc_volume_axis" : "STRC Volume (Shares)",
         "strc_close_price" : "STRC Closing Price ($)",
+        "hodl_delta" : "0.00% Benchmark (Baseline)",
         "expander_title": "View Current Market & Fundamental Data",
         "sources_title": "📚 Primary Data Sources & SEC Filings",
         "footer_btc": "BTC Price",
@@ -375,7 +377,7 @@ with col2:
     st.metric(
         label=t["metric_hodl"],
         value=f"{hodl_benchmark_sats:,.0f} Sats",
-        delta="100% Benchmark (Basis)"
+        delta=t["hodl_delta"]  # <--- Zeigt jetzt sauber 0.00% an
     )
 
 with col3:
